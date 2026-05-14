@@ -16,17 +16,17 @@ class EffectManager:
 
     def discover_and_register(
         self,
-        effects_package_path: str,
+        effects_package,
         dependencies: Dict[str, any]
     ):
         """
-        自动发现并注册指定包路径下的所有效果处理器。
+        自动发现并注册指定包模块下的所有效果处理器。
+        effects_package 应为一个 Python 包模块对象。
         """
+        effects_package_path = effects_package.__name__
         logger.info(f"正在从 '{effects_package_path}' 自动发现道具效果...")
 
-        package = importlib.import_module(effects_package_path)
-
-        for _, name, _ in pkgutil.iter_modules(package.__path__):
+        for _, name, _ in pkgutil.iter_modules(effects_package.__path__):
             try:
                 module = importlib.import_module(f"{effects_package_path}.{name}")
                 for attribute_name in dir(module):

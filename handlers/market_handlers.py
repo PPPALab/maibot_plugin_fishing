@@ -407,7 +407,7 @@ async def shop(plugin: "FishingPlugin", event: AstrMessageEvent):
 
         try:
             current_time = datetime.now()
-        except:
+        except Exception:
             pass
 
         if start_time:
@@ -416,7 +416,7 @@ async def shop(plugin: "FishingPlugin", event: AstrMessageEvent):
                     start_time = datetime.fromisoformat(
                         start_time.replace("Z", "+00:00")
                     )
-                except:
+                except Exception:
                     pass
             if isinstance(start_time, datetime):
                 if current_time and current_time < start_time:
@@ -428,7 +428,7 @@ async def shop(plugin: "FishingPlugin", event: AstrMessageEvent):
             if isinstance(end_time, str):
                 try:
                     end_time = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-                except:
+                except Exception:
                     pass
             if isinstance(end_time, datetime):
                 if current_time and current_time > end_time:

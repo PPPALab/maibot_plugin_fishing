@@ -131,10 +131,8 @@ class AchievementService:
                 logger.warning(f"未知的成就奖励类型: '{reward_type}'，无法发放。")
                 return False
         except (sqlite3.IntegrityError, sqlite3.OperationalError) as e:
-            # 只捕获预期的数据库完整性错误，避免掩盖编程错误
             logger.error(f"发放成就奖励时发生数据库错误: {e}", exc_info=True)
             return False
-        # 其他异常（如 AttributeError, KeyError 等）应该重新抛出，以便发现编程错误
 
     def _grant_coins_reward(self, user: User, achievement: BaseAchievement, reward_value: int, reward_quantity: int) -> bool:
         """发放金币奖励"""
@@ -213,8 +211,7 @@ class AchievementService:
                     self._process_user_achievements(user_id)
                 time.sleep(600) # 10分钟检查一次
             except Exception as e:
-                logger.error(f"成就检查任务出错: {e}")
-                logger.error("堆栈信息:", exc_info=True)
+                logger.error(f"成就检查任务出错: {e}", exc_info=True)
                 time.sleep(60)
 
     def _process_user_achievements(self, user_id: str):
@@ -231,8 +228,6 @@ class AchievementService:
                 continue
             # 调用每个成就自己的检查方法
             if ach.check(user_context):
-                # 如果成就完成，发放奖励并更新进度
-                # 无论奖励是否成功，成就都会解锁；如果奖励失败，记录错误信息供管理员处理
                 reward_success = self._grant_reward(user_context.user, ach)
                 if not reward_success:
                     logger.error(
@@ -241,7 +236,8 @@ class AchievementService:
                         f"成就名称: '{ach.name}' (ID: {ach.id}), "
                         f"奖励信息: {ach.reward if hasattr(ach, 'reward') and ach.reward else '无奖励'}"
                     )
-                # 无论奖励是否成功，成就都会解锁
+                    # 奖励发放失败时，不标记完成，等待下次检查时重试
+                    continue
                 self.achievement_repo.update_user_progress(user_id, ach.id, ach.get_progress(user_context), completed_at=datetime.now())
                 
     # --- 成就相关的API接口 ---

@@ -36,6 +36,7 @@ from .core.services.fishing_zone_service import FishingZoneService
 from .core.services.exchange_service import ExchangeService # 新增交易所Service
 from .core.services.sicbo_service import SicboService # 新增骰宝Service
 from .core.services.red_packet_service import RedPacketService # 新增红包Service
+from .core.services import item_effects  # 效果模块包
 
 from .core.database.migration import run_migrations
 
@@ -286,7 +287,7 @@ class FishingPlugin(Star):
         # 3.2 实例化效果管理器并自动注册所有效果（需要在fishing_service之后）
         self.effect_manager = EffectManager()
         self.effect_manager.discover_and_register(
-            effects_package_path="data.plugins.astrbot_plugin_fishing.core.services.item_effects",
+            effects_package=item_effects,
             dependencies={
                 "user_repo": self.user_repo, 
                 "buff_repo": self.buff_repo,
