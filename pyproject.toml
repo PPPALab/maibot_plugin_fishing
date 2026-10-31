@@ -1,0 +1,22 @@
+[project]
+name = "maibot-plugin-fishing-astrbot"
+version = "1.0.0"
+description = "钓鱼小游戏，支持钓鱼、市场、商店、抽卡等，移植自 AstrBot。"
+requires-python = ">=3.12"
+license = "AGPL-3.0-only"
+dependencies = [
+  "maibot-plugin-sdk==2.20.0", "Pillow>=10.4,<14", "quart>=0.20,<0.23",
+  "hypercorn>=0.17,<0.19", "requests>=2.32,<3", "numpy>=1.26,<3",
+  "PyYAML>=6,<7", "aiohttp>=3.10,<4", "fonttools>=4.55,<5", "tomlkit>=0.13,<1"
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.11,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]

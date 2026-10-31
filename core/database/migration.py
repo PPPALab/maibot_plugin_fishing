@@ -2,9 +2,11 @@ import sqlite3
 import os
 import re
 import importlib
+from .unit_of_work import Connection, Cursor
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 def get_current_version(cursor: sqlite3.Cursor) -> int:
     """获取当前数据库的版本号。"""
     try:
@@ -46,7 +48,7 @@ def run_migrations(db_path: str, migrations_dir: str):
             key=lambda f: int(f.split("_")[0])
         )
     except FileNotFoundError:
-        logger.warning(f"迁移目录 '{migrations_dir}' 不存在，跳过迁移。")
+        raise FileNotFoundError(f"迁移目录 '{migrations_dir}' 不存在，跳过迁移。")
         return
 
     for filename in migration_files:
@@ -54,16 +56,23 @@ def run_migrations(db_path: str, migrations_dir: str):
         if version > current_version:
             logger.info(f"正在应用迁移脚本: {filename}...")
             try:
-                module_name = f"data.plugins.astrbot_plugin_fishing.core.database.migrations.{filename[:-3]}"
+                module_name = f"{__package__}.migrations.{filename[:-3]}"
                 migration_module = importlib.import_module(module_name)
 
                 with sqlite3.connect(db_path) as conn:
                     conn.row_factory = sqlite3.Row
-                    cursor = conn.cursor()
+                    # Some upstream migrations commit via cursor.connection. Prevent
+                    # those inner commits so schema_version and schema remain atomic.
+                    guard = Connection.__new__(Connection)
+                    guard.raw = conn
+                    guard.failed = False
+                    cursor = Cursor(guard, conn.cursor())
 
                     try:
-                        cursor.execute("BEGIN TRANSACTION")
+                        conn.execute("BEGIN IMMEDIATE")
                         migration_module.up(cursor)
+                        if guard.failed:
+                            raise RuntimeError(f"Migration requested rollback: {filename}")
                         # 在同一个事务中更新版本号
                         set_version(cursor, version)
                         conn.commit()

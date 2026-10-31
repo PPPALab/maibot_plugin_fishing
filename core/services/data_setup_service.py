@@ -14,9 +14,8 @@ from ..initial_data import (
     SHOP_DATA,
 )
 from ..domain.models import Item
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 class DataSetupService:
     """负责在首次启动时初始化游戏基础数据。"""
 
@@ -43,14 +42,11 @@ class DataSetupService:
         检查核心数据表是否为空，如果为空则进行数据填充。
         这是一个幂等操作（idempotent），可以安全地多次调用而不会重复插入数据。
         """
-        try:
-            existing_fish = self.item_template_repo.get_all_fish()
-            if existing_fish:
-                logger.info("数据库核心数据已存在，跳过初始化。")
-                return
-        except Exception as e:
-            # 如果表不存在等数据库错误，也需要继续执行创建和插入
-            logger.error(f"检查数据时发生错误 (可能是表不存在，将继续初始化): {e}")
+        # 表结构由迁移先行创建；读取失败代表真实故障，不应继续写入掩盖异常。
+        existing_fish = self.item_template_repo.get_all_fish()
+        if existing_fish:
+            logger.info("数据库核心数据已存在，跳过初始化。")
+            return
 
         logger.info("检测到数据库为空或核心数据不完整，正在初始化游戏数据...")
 
@@ -75,7 +71,13 @@ class DataSetupService:
                 "effect_description": bait[3],
                 "duration_minutes": bait[4],
                 "cost": bait[5],
-                "required_rod_rarity": bait[6]
+                "required_rod_rarity": bait[6],
+                "success_rate_modifier": bait[7],
+                "rare_chance_modifier": bait[8],
+                "garbage_reduction_modifier": bait[9],
+                "value_modifier": bait[10],
+                "quantity_modifier": bait[11],
+                "is_consumable": bait[12],
             })
 
         # 填充鱼竿数据
@@ -338,4 +340,3 @@ class DataSetupService:
             logger.info("新道具添加完成。")
         else:
             logger.info("没有发现新的道具需要添加。")
-

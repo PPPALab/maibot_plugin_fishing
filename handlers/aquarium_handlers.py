@@ -1,12 +1,12 @@
-from astrbot.api.event import AstrMessageEvent
+from ..events import GameEvent
 from ..utils import format_rarity_display
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def aquarium(self: "FishingPlugin", event: AstrMessageEvent):
+async def aquarium(self: "FishingPlugin", event: GameEvent):
     """水族箱主命令：
     - "水族箱": 显示水族箱列表
     - "水族箱 帮助": 显示帮助
@@ -66,7 +66,7 @@ async def aquarium(self: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(message)
 
 
-async def add_to_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
+async def add_to_aquarium(self: "FishingPlugin", event: GameEvent):
     """将鱼从鱼塘添加到水族箱"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -108,7 +108,7 @@ async def add_to_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ {result['message']}")
 
 
-async def remove_from_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
+async def remove_from_aquarium(self: "FishingPlugin", event: GameEvent):
     """将鱼从水族箱移回鱼塘"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -150,7 +150,7 @@ async def remove_from_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ {result['message']}")
 
 
-async def upgrade_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
+async def upgrade_aquarium(self: "FishingPlugin", event: GameEvent):
     """升级水族箱容量"""
     user_id = self._get_effective_user_id(event)
     # 直接尝试升级，失败时会返回具体原因（包含所需费用）
@@ -165,7 +165,7 @@ async def upgrade_aquarium(self: "FishingPlugin", event: AstrMessageEvent):
     # 过度信息命令删除：在升级操作中按需提示
 
 
-async def aquarium_help(self: "FishingPlugin", event: AstrMessageEvent):
+async def aquarium_help(self: "FishingPlugin", event: GameEvent):
     """水族箱帮助信息"""
     message = """【🐠 水族箱系统帮助】：
 

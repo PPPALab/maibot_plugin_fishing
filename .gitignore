@@ -12,3 +12,37 @@ __pycache__/
 .idea/
 
 *.db
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+test_output/
+tests/test_*_output.png
+config.toml
+config.upgrade.lock
+config.toml.before-version-*.bak
+.config-upgrade-*
+
+# Private local notes, credentials, runtime data, and generated output.
+# Tests, LICENSE and THIRD_PARTY_NOTICES.md stay versioned.
+.local/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+/docs/
+/agent.md
+data/
+avatar_cache/
+fish_icon_cache/
+dist/
+build/
+*.egg-info/
+htmlcov/
+.coverage
+coverage.xml
+docs/test-results.xml

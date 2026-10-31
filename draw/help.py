@@ -2,6 +2,21 @@ import math
 import os
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from .styles import COLOR_TITLE, COLOR_CMD, COLOR_LINE, COLOR_SHADOW, load_font
+from .text_utils import wrap_text_by_width_optimized
+
+
+def replace_white_background(img, new_bg_color=(240, 248, 255), threshold=240):
+    """Preserve RGBA pixels, using Pillow's current API (and pre-12 compatibility)."""
+    img = img.convert('RGBA')
+    if hasattr(img, 'get_flattened_data'):
+        data = img.get_flattened_data()
+    else:
+        # Older supported Pillow releases have no get_flattened_data. Avoid
+        # getdata entirely, so newer releases cannot hit its deprecated path.
+        data = (img.getpixel((x, y)) for y in range(img.height) for x in range(img.width))
+    img.putdata([(*new_bg_color, a) if r >= threshold and g >= threshold and b >= threshold
+                 else (r, g, b, a) for r, g, b, a in data])
+    return img
 
 
 def draw_help_image():
@@ -35,28 +50,8 @@ def draw_help_image():
         bbox = _measure_draw.textbbox((0, 0), text, font=font)
         return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
-    # 5. 处理logo背景色的函数
-    def replace_white_background(img, new_bg_color=bg_top, threshold=240):
-        """将图片的白色背景替换为指定颜色"""
-        img = img.convert("RGBA")
-        data = img.getdata()
-        new_data = []
-
-        for item in data:
-            r, g, b = item[:3]
-            alpha = item[3] if len(item) > 3 else 255
-
-            # 如果像素接近白色，就替换为新背景色
-            if r >= threshold and g >= threshold and b >= threshold:
-                new_data.append((*new_bg_color, alpha))
-            else:
-                new_data.append(item)
-
-        img.putdata(new_data)
-        return img
-
     # 6. Logo/标题布局（先定义数值，稍后绘制）
-    logo_size = 160
+    logo_size = 60
     logo_x = 30
     logo_y = 25
     title_y = logo_y + logo_size // 2
@@ -72,6 +67,19 @@ def draw_help_image():
         draw.rounded_rectangle([x0, y0, x1, y1], radius, fill=card_bg, outline=line_color, width=1)
 
     # 8. 绘制章节和命令
+    def card_layout(cmds, cols):
+        card_w = (width - 60) // cols
+        available = card_w - 34
+        layouts = []
+        for cmd, desc in cmds:
+            commands = wrap_text_by_width_optimized(cmd, cmd_font, available)
+            descriptions = [line for paragraph in desc.split('\n')
+                            for line in wrap_text_by_width_optimized(paragraph, desc_font, available)]
+            layouts.append((commands, descriptions))
+        heights = [max(85, max(28 + len(c) * 23 + len(d) * 21 for c, d in layouts[i:i + cols]))
+                   for i in range(0, len(layouts), cols)]
+        return card_w, layouts, heights
+
     def draw_section(title, cmds, y_start, cols=3):
         # 章节标题左对齐
         title_x = 50
@@ -85,15 +93,15 @@ def draw_help_image():
 
         y = y_start + h // 2 + 25
 
-        card_w = (width - 60) // cols
-        card_h = 85
+        card_w, layouts, heights = card_layout(cmds, cols)
         pad = 15
 
         for idx, (cmd, desc) in enumerate(cmds):
             col = idx % cols
             row = idx // cols
             x0 = 30 + col * card_w
-            y0 = y + row * (card_h + pad)
+            card_h = heights[row]
+            y0 = y + sum(height + pad for height in heights[:row])
             x1 = x0 + card_w - 10
             y1 = y0 + card_h
 
@@ -102,14 +110,15 @@ def draw_help_image():
             # 文本居中显示
             cx = (x0 + x1) // 2
             # 命令文本
-            draw.text((cx, y0 + 18), cmd, fill=cmd_color, font=cmd_font, anchor="mt")
-            # 描述文本 - 支持多行
-            desc_lines = desc.split('\n') if '\n' in desc else [desc]
+            cmd_lines, desc_lines = layouts[idx]
+            for i, line in enumerate(cmd_lines):
+                draw.text((cx, y0 + 14 + i * 23), line, fill=cmd_color, font=cmd_font, anchor="mt")
             for i, line in enumerate(desc_lines):
-                draw.text((cx, y0 + 45 + i * 18), line, fill=(100, 100, 100), font=desc_font, anchor="mt")
+                draw.text((cx, y0 + 20 + len(cmd_lines) * 23 + i * 21), line,
+                          fill=(100, 100, 100), font=desc_font, anchor="mt")
 
         rows = math.ceil(len(cmds) / cols)
-        return y + rows * (card_h + pad) + 35
+        return y + sum(height + pad for height in heights) + 35
 
     # 9. 各段命令数据
     basic = [
@@ -249,23 +258,21 @@ def draw_help_image():
     ]
 
     # 10. 先计算自适应高度
-    def section_delta(item_count: int, cols: int) -> int:
-        rows = math.ceil(item_count / cols) if item_count > 0 else 0
+    def section_delta(cmds, cols: int) -> int:
         # 与 draw_section 中的垂直占位保持一致：h//2+25 起始 + rows*(card_h+pad) + 35
         _, h = measure_text_size("标题", section_font)
-        card_h = 85
-        pad = 15
-        return (h // 2 + 25) + rows * (card_h + pad) + 35
+        heights = card_layout(cmds, cols)[2]
+        return (h // 2 + 25) + sum(height + 15 for height in heights) + 35
 
     y0_est = logo_y + logo_size + 30
-    y0_est += section_delta(len(basic), 3)
-    y0_est += section_delta(len(inventory), 3)
-    y0_est += section_delta(len(market), 3)
-    y0_est += section_delta(len(gacha), 3)
-    y0_est += section_delta(len(sicbo), 3)
-    y0_est += section_delta(len(social), 2)
-    y0_est += section_delta(len(exchange), 2)
-    y0_est += section_delta(len(admin), 2)
+    y0_est += section_delta(basic, 3)
+    y0_est += section_delta(inventory, 3)
+    y0_est += section_delta(market, 3)
+    y0_est += section_delta(gacha, 3)
+    y0_est += section_delta(sicbo, 3)
+    y0_est += section_delta(social, 2)
+    y0_est += section_delta(exchange, 2)
+    y0_est += section_delta(admin, 2)
     footer_y_est = y0_est + 20
     final_height = footer_y_est + 30
 
@@ -273,25 +280,7 @@ def draw_help_image():
     image = create_vertical_gradient(width, final_height, bg_top, bg_bot)
     draw = ImageDraw.Draw(image)
 
-    # 绘制 Logo 和 标题
-    try:
-        logo = Image.open(os.path.join(os.path.dirname(__file__), "resource", "astrbot_logo.jpg"))
-        logo = replace_white_background(logo, bg_top)
-        logo.thumbnail((logo_size, logo_size), Image.Resampling.LANCZOS)
-        mask = Image.new("L", logo.size, 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.rounded_rectangle([0, 0, logo.size[0], logo.size[1]], 20, fill=255)
-        output = Image.new("RGBA", logo.size, (0, 0, 0, 0))
-        output.paste(logo, (0, 0))
-        output.putalpha(mask)
-        image.paste(output, (logo_x, logo_y), output)
-    except Exception as e:
-        # 如果没有logo文件，绘制一个圆角占位符
-        draw.rounded_rectangle((logo_x, logo_y, logo_x + logo_size, logo_y + logo_size),
-                               20, fill=bg_top, outline=(180, 180, 180), width=2)
-        draw.text((logo_x + logo_size // 2, logo_y + logo_size // 2), "LOGO",
-                  fill=(120, 120, 120), font=subtitle_font, anchor="mm")
-
+    # User-facing header has no upstream product branding; attribution stays in notices.
     draw.text((width // 2, title_y), "钓鱼游戏帮助", fill=title_color, font=title_font, anchor="mm")
 
     # 重新基于真实 draw 定义尺寸函数

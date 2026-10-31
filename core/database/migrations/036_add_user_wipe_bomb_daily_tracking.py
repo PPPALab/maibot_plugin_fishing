@@ -1,8 +1,8 @@
 # 迁移脚本 034: 为 users 表添加每日擦弹次数追踪字段
 
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     应用此迁移：为 users 表添加 wipe_bomb_attempts_today 和 last_wipe_bomb_date 字段。

@@ -9,9 +9,9 @@
 
 import sqlite3
 
-from astrbot.api import logger
+import logging
 
-
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """执行迁移"""
     logger.info("正在执行 038_add_quality_level_to_shop_and_market: 为商店和市场系统添加品质支持...")

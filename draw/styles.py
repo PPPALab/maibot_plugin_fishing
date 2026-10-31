@@ -72,10 +72,8 @@ FONT_PATH_BOLD = os.path.join(os.path.dirname(__file__), "resource", "DouyinSans
 
 # --- 字体加载 ---
 def load_font(size):
-    try:
-        return ImageFont.truetype(FONT_PATH_BOLD, size)
-    except IOError:
-        return ImageFont.load_default()
+    from .text_utils import load_font_with_cjk_fallback
+    return load_font_with_cjk_fallback(FONT_PATH_BOLD, size)
 
 FONT_HEADER = load_font(36)    # 标题字体
 FONT_SUBHEADER = load_font(24) # 收集进度字体

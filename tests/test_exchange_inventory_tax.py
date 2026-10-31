@@ -1,34 +1,9 @@
 from __future__ import annotations
 
-import sys
-import types
 from datetime import datetime, timedelta
 
-# Provide a lightweight astrbot.api.logger stub for unit tests.
-class _DummyLogger:
-    def info(self, *args, **kwargs):
-        pass
-
-    def error(self, *args, **kwargs):
-        pass
-
-    def warning(self, *args, **kwargs):
-        pass
-
-    def debug(self, *args, **kwargs):
-        pass
-
-
-if "astrbot.api" not in sys.modules:
-    astrbot_module = types.ModuleType("astrbot")
-    api_module = types.ModuleType("astrbot.api")
-    api_module.logger = _DummyLogger()
-    astrbot_module.api = api_module
-    sys.modules["astrbot"] = astrbot_module
-    sys.modules["astrbot.api"] = api_module
-
-from core.domain.models import Exchange, User, UserCommodity
-from core.services.exchange_inventory_service import ExchangeInventoryService
+from fishing_port.core.domain.models import Exchange, User, UserCommodity
+from fishing_port.core.services.exchange_inventory_service import ExchangeInventoryService
 
 
 class FakeUserRepo:
@@ -148,4 +123,3 @@ def test_clear_all_inventory_uses_profit_as_tax_base():
     assert "税基 350" in result["message"]
     assert log_repo.records[-1].original_amount == 350
     assert log_repo.records[-1].tax_amount == 70
-

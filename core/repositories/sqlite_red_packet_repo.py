@@ -7,8 +7,9 @@ import threading
 from datetime import datetime
 from typing import Optional, List
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 from ..domain.models import RedPacket, RedPacketRecord
 
 
@@ -19,14 +20,9 @@ class SqliteRedPacketRepository:
         self.db_path = db_path
         self._local = threading.local()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON;")
-            self._local.connection = conn
-        return conn
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     def _parse_datetime(self, dt_val):
         """解析日期时间"""
@@ -414,8 +410,8 @@ class SqliteRedPacketRepository:
             expired_time = datetime.now() - timedelta(hours=24)
             
             cursor.execute("""
-                SELECT id FROM red_packets
-                WHERE expired_at < ? AND status IN ('active', 'expired')
+                SELECT packet_id FROM red_packets
+                WHERE expires_at < ?
             """, (expired_time,))
             
             expired_packets = cursor.fetchall()
@@ -428,11 +424,11 @@ class SqliteRedPacketRepository:
             placeholders = ','.join(['?'] * len(packet_ids))
             
             cursor.execute(f"""
-                DELETE FROM red_packet_records WHERE red_packet_id IN ({placeholders})
+                DELETE FROM red_packet_records WHERE packet_id IN ({placeholders})
             """, packet_ids)
             
             cursor.execute(f"""
-                DELETE FROM red_packets WHERE id IN ({placeholders})
+                DELETE FROM red_packets WHERE packet_id IN ({placeholders})
             """, packet_ids)
             
             conn.commit()

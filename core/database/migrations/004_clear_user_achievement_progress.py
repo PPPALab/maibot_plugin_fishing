@@ -1,5 +1,5 @@
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 import sqlite3
 
 def up(cursor: sqlite3.Cursor):

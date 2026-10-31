@@ -6,8 +6,9 @@ import random
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 from ..domain.models import RedPacket, RedPacketRecord
 from ..repositories.sqlite_red_packet_repo import SqliteRedPacketRepository
 from ..repositories.sqlite_user_repo import SqliteUserRepository
@@ -159,6 +160,11 @@ class RedPacketService:
             packet_id: 红包ID（可选，指定领取哪个红包）
             password: 口令（用于口令红包）
         """
+        # 领取必须能实际入账；未注册用户不能消耗红包或留下领取记录。
+        user = self.user_repo.get_by_id(user_id)
+        if not user:
+            return {"success": False, "message": "❌ 请先注册后再领取红包"}
+
         # 先过期旧红包
         self.red_packet_repo.expire_old_packets(datetime.now())
         
@@ -180,7 +186,7 @@ class RedPacketService:
             # 口令红包验证
             if packet.packet_type == 'password':
                 if not password or password != packet.password:
-                    return {"success": False, "message": f"❌ 口令错误！请使用：/领红包 {packet_id} {packet.password}"}
+                    return {"success": False, "message": f"❌ 口令错误！请使用：/领红包 {packet_id} [正确口令]"}
         else:
             # 没有指定ID，获取群组中的活跃红包
             active_packets = self.red_packet_repo.get_active_red_packets_in_group(group_id)
@@ -228,10 +234,8 @@ class RedPacketService:
         self.red_packet_repo.create_claim_record(record)
         
         # 给用户加金币
-        user = self.user_repo.get_by_id(user_id)
-        if user:
-            user.coins += amount
-            self.user_repo.update(user)
+        user.coins += amount
+        self.user_repo.update(user)
         
         # 构建返回消息
         type_name = {

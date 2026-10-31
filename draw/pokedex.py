@@ -1,7 +1,8 @@
 import os
 from PIL import Image, ImageDraw
 from typing import List, Dict, Any
-from astrbot.api import logger
+import logging
+logger = logging.getLogger(__name__)
 from datetime import datetime
 
 from .utils import get_user_avatar, get_fish_icon
@@ -130,9 +131,10 @@ async def draw_pokedex(pokedex_data: Dict[str, Any], user_info: Dict[str, Any], 
         icon_x = left_pane_x
         icon_y = card_y1 + (FISH_CARD_HEIGHT - icon_size) // 2
         icon_url = fish.get("icon_url")
-        if icon_url and data_dir:
+        if data_dir:
             try:
-                fish_icon = await get_fish_icon(icon_url, data_dir, icon_size)
+                fish_icon = await get_fish_icon(icon_url, data_dir, icon_size,
+                                                fish_name=fish.get('name', '鱼'), rarity=fish.get('rarity', 1))
                 if fish_icon:
                     # 计算图标居中位置
                     icon_x_offset = icon_x
@@ -184,8 +186,10 @@ async def draw_pokedex(pokedex_data: Dict[str, Any], user_info: Dict[str, Any], 
 
     # 绘制页脚 - 使用背包颜色
     footer_y = img_height - PADDING - FOOTER_HEIGHT + 20
-    footer_text = f"◈ 第 {page} / {total_pages} 页 - 使用 /图鉴 [页码] 查看更多 ◈"
+    footer_text = f"第 {page} / {max(1, total_pages)} 页 - 使用 /图鉴 [页码] 查看更多"
     draw.text((PADDING, footer_y), footer_text, font=FONT_SMALL, fill=text_secondary)
+    draw.text((PADDING, footer_y + 18), "未配置或无法加载图片时显示本地示意插画",
+              font=FONT_SMALL, fill=text_secondary)
 
     # 应用整个图片的圆角遮罩
     def apply_rounded_corners(image, corner_radius=20):

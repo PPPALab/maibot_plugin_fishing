@@ -1,18 +1,19 @@
 import os
 import time
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.core.message.components import At
-from astrbot.api import logger
+from ..events import GameEvent
+from ..events import Mention
+import logging
+logger = logging.getLogger(__name__)
 from ..draw.rank import draw_fishing_ranking
 from ..utils import parse_target_user_id
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def ranking(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def ranking(plugin: "FishingPlugin", event: GameEvent):
     """
     查看排行榜。
     支持按不同标准排序，例如：/排行榜 数量 或 /排行榜 重量 或 /排行榜 历史
@@ -96,14 +97,14 @@ async def ranking(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.image_result(output_path)
 
 
-async def steal_fish(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def steal_fish(plugin: "FishingPlugin", event: GameEvent):
     """偷鱼功能"""
     user_id = plugin._get_effective_user_id(event)
     message_obj = event.message_obj
     target_id = None
     if hasattr(message_obj, "message"):
         for comp in message_obj.message:
-            if isinstance(comp, At):
+            if isinstance(comp, Mention):
                 if comp.qq != message_obj.self_id:
                     target_id = str(comp.qq)
                     break
@@ -129,7 +130,7 @@ async def steal_fish(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def electric_fish(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def electric_fish(plugin: "FishingPlugin", event: GameEvent):
     """电鱼功能"""
     # 检查电鱼功能是否启用
     electric_fish_config = plugin.game_config.get("electric_fish", {})
@@ -142,7 +143,7 @@ async def electric_fish(plugin: "FishingPlugin", event: AstrMessageEvent):
     target_id = None
     if hasattr(message_obj, "message"):
         for comp in message_obj.message:
-            if isinstance(comp, At):
+            if isinstance(comp, Mention):
                 # 排除机器人本身的id
                 if comp.qq != message_obj.self_id:
                     target_id = str(comp.qq)
@@ -167,7 +168,7 @@ async def electric_fish(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def dispel_protection(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def dispel_protection(plugin: "FishingPlugin", event: GameEvent):
     """使用驱灵香驱散目标的海灵守护"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split()
@@ -212,7 +213,7 @@ async def dispel_protection(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(result["message"])
 
 
-async def view_titles(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def view_titles(plugin: "FishingPlugin", event: GameEvent):
     """查看用户称号"""
     user_id = plugin._get_effective_user_id(event)
     titles = plugin.user_service.get_user_titles(user_id).get("titles", [])
@@ -226,7 +227,7 @@ async def view_titles(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 您还没有任何称号，快去完成成就或参与活动获取吧！")
 
 
-async def use_title(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def use_title(plugin: "FishingPlugin", event: GameEvent):
     """使用称号"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -241,7 +242,7 @@ async def use_title(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def view_achievements(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def view_achievements(plugin: "FishingPlugin", event: GameEvent):
     """查看用户成就"""
     from ..utils import safe_datetime_handler
 
@@ -266,7 +267,7 @@ async def view_achievements(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 您还没有任何成就，快去完成任务或参与活动获取吧！")
 
 
-async def tax_record(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def tax_record(plugin: "FishingPlugin", event: GameEvent):
     """查看税收记录"""
     from ..utils import safe_datetime_handler
 

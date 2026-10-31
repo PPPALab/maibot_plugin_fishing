@@ -1,11 +1,14 @@
 import sqlite3
+import logging
+logger = logging.getLogger(__name__)
 
 def up(cursor: sqlite3.Cursor):
     """
     修复现有数据的锁定字段问题
     确保所有现有的鱼竿和饰品都有 is_locked 字段
     """
-    from astrbot.api import logger
+    import logging
+    logger = logging.getLogger(__name__)
     logger.info("正在执行 018_fix_existing_lock_fields: 修复现有数据的锁定字段...")
     
     # 检查 user_rods 表是否有 is_locked 字段

@@ -14,14 +14,9 @@ class SqliteAchievementRepository(AbstractAchievementRepository):
         self.db_path = db_path
         self._local = threading.local()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON;")
-            self._local.connection = conn
-        return conn
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     def _row_to_achievement(self, row: sqlite3.Row) -> Optional[Achievement]:
         if not row:

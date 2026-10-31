@@ -13,16 +13,9 @@ class SqliteGachaRepository(AbstractGachaRepository):
         self.db_path = db_path
         self._local = threading.local()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """获取一个线程安全的数据库连接。"""
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            # 开启外键约束，确保奖池删除时，其下的物品也被删除
-            conn.execute("PRAGMA foreign_keys = ON;")
-            self._local.connection = conn
-        return conn
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     # --- 私有映射辅助方法 ---
     def _row_to_gacha_pool(self, row: sqlite3.Row) -> Optional[GachaPool]:
@@ -207,6 +200,10 @@ class SqliteGachaRepository(AbstractGachaRepository):
             return new_pool_id
 
     # Pool Item CRUD
+    def add_pool_item(self, pool_id: int, data: Dict[str, Any]) -> None:
+        """Upstream seed data uses typed IDs; delegate to the existing manager writer."""
+        self.add_item_to_pool(pool_id, {**data, "item_full_id": f"{data['item_type']}-{data['item_id']}"})
+
     def add_item_to_pool(self, pool_id: int, data: Dict[str, Any]) -> None:
         """后台向抽卡池添加一个物品"""
         item_full_id = data.get("item_full_id", "").split("-")

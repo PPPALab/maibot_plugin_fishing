@@ -16,27 +16,21 @@ class SqliteUserBuffRepository(AbstractUserBuffRepository):
         self.db_path = db_path
         self._local = threading.local()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """获取一个线程安全的数据库连接。"""
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON;")
-            self._local.connection = conn
-        return conn
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     def _to_domain(self, row: sqlite3.Row) -> UserBuff:
         # 处理 started_at 字段
         started_at = row['started_at']
         if isinstance(started_at, str):
-            started_at = datetime.strptime(started_at, DATETIME_FORMAT)
+            started_at = datetime.fromisoformat(started_at)
         
         # 处理 expires_at 字段
         expires_at = row['expires_at']
         if expires_at is not None:
             if isinstance(expires_at, str):
-                expires_at = datetime.strptime(expires_at, DATETIME_FORMAT)
+                expires_at = datetime.fromisoformat(expires_at)
         
         return UserBuff(
             id=row['id'],

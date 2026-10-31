@@ -9,7 +9,7 @@ from ..repositories.abstract_repository import (
     AbstractItemTemplateRepository,
 )
 from .effect_manager import EffectManager
-from ..utils import calculate_after_refine
+from ..utils import calculate_after_refine, get_now
 from .game_mechanics_service import GameMechanicsService
 
 
@@ -829,9 +829,31 @@ class InventoryService:
         if not bait_template:
             return {"success": False, "message": "鱼饵信息不存在"}
 
+        now = get_now()
+        if user.current_bait_id is not None:
+            current = self.item_template_repo.get_bait_by_id(user.current_bait_id)
+            if current and current.duration_minutes > 0:
+                started = user.bait_start_time or now
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=now.tzinfo)
+                if current.bait_id == bait_id and now < started + timedelta(minutes=current.duration_minutes):
+                    # 重复使用不能刷新有效期；兼容旧记录缺失时间的情况。
+                    user.bait_start_time = started
+                    self.user_repo.update(user)
+                    return {"success": True, "message": f"💫 鱼饵【{current.name}】仍在生效，有效期不变"}
+                # 已到期或主动切换时结算已启用的限时饵，避免切换免费续期。
+                if current.is_consumable and bait_inventory.get(current.bait_id, 0) > 0:
+                    self.inventory_repo.update_bait_quantity(user_id, current.bait_id, -1)
+                    bait_inventory[current.bait_id] -= 1
+                user.current_bait_id = None
+                user.bait_start_time = None
+                if bait_inventory.get(bait_id, 0) <= 0:
+                    self.user_repo.update(user)
+                    return {"success": False, "message": "原鱼饵已到期消耗，没有剩余鱼饵可启用"}
+
         # 更新用户当前鱼饵状态
         user.current_bait_id = bait_id
-        user.bait_start_time = datetime.now()
+        user.bait_start_time = now
 
         self.user_repo.update(user)
 

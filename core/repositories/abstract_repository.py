@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from ..domain.models import UserFishStat
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 
@@ -304,6 +305,11 @@ class AbstractInventoryRepository(ABC):
     # 获取所有钓鱼区域
     @abstractmethod
     def get_all_zones(self) -> List[FishingZone]: pass
+
+    @abstractmethod
+    def reset_rare_fish_daily_quota(self, reset_time: datetime) -> bool:
+        """按刷新时间点重置配额并持久化标记；同一时间点只执行一次。"""
+        pass
 
     @abstractmethod
     def update_zone_configs(self, zone_id: int, configs: str) -> None: pass

@@ -1,7 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     新增道具模板表 items 与用户道具表 user_items。

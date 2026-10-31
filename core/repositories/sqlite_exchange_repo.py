@@ -13,10 +13,8 @@ class SqliteExchangeRepository(AbstractExchangeRepository):
         self._local = threading.local()
 
     def _get_connection(self):
-        """获取数据库连接"""
-        if not hasattr(self._local, 'connection'):
-            self._local.connection = sqlite3.connect(self.db_path)
-        return self._local.connection
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     def get_all_commodities(self) -> List[Commodity]:
         conn = self._get_connection()
@@ -76,7 +74,8 @@ class SqliteExchangeRepository(AbstractExchangeRepository):
                 )
                 commodities.append(commodity)
             except Exception as e:
-                from astrbot.api import logger
+                import logging
+                logger = logging.getLogger(__name__)
                 logger.error(f"解析用户商品数据失败: {e}, 行数据: {row}")
                 continue
                 

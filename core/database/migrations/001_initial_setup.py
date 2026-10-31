@@ -1,8 +1,8 @@
 import sqlite3
 
-from astrbot.api import logger
+import logging
 
-
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     应用此迁移：创建项目所需的全部初始表和索引。

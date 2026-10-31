@@ -1,13 +1,8 @@
 from datetime import datetime, timedelta
-from importlib import import_module
 from typing import Dict, List, Any, Optional
 
-try:
-    logger = import_module("astrbot.api").logger
-except ModuleNotFoundError:  # pragma: no cover - fallback for testing environments
-    import logging
-
-    logger = logging.getLogger(__name__)
+import logging
+logger = logging.getLogger(__name__)
 
 from ..domain.models import User, UserCommodity
 from ..repositories.abstract_repository import AbstractExchangeRepository, AbstractUserRepository, AbstractLogRepository
@@ -73,6 +68,8 @@ class ExchangeInventoryService:
 
     def purchase_commodity(self, user_id: str, commodity_id: str, quantity: int, current_price: int) -> Dict[str, Any]:
         """购买大宗商品"""
+        if type(quantity) is not int or quantity <= 0 or type(current_price) is not int or current_price <= 0:
+            return {"success": False, "message": "数量和价格必须为正整数"}
         try:
             # 检查用户是否存在
             user = self.user_repo.get_by_id(user_id)
@@ -158,8 +155,11 @@ class ExchangeInventoryService:
             logger.error(f"购买大宗商品失败: {e}")
             return {"success": False, "message": f"购买失败: {str(e)}"}
 
-    def sell_commodity(self, user_id: str, commodity_id: str, quantity: int, current_price: int) -> Dict[str, Any]:
+    def sell_commodity(self, user_id: str, commodity_id: str, quantity: int, current_price: int,
+                       *, instance_id: Optional[int] = None) -> Dict[str, Any]:
         """卖出大宗商品"""
+        if type(quantity) is not int or quantity <= 0 or type(current_price) is not int or current_price <= 0:
+            return {"success": False, "message": "数量和价格必须为正整数"}
         try:
             # 检查用户是否存在
             user = self.user_repo.get_by_id(user_id)
@@ -172,7 +172,8 @@ class ExchangeInventoryService:
             
             # 获取用户库存
             inventory = self.exchange_repo.get_user_commodities(user_id)
-            commodity_items = [item for item in inventory if item.commodity_id == commodity_id]
+            commodity_items = [item for item in inventory if item.commodity_id == commodity_id
+                               and (instance_id is None or item.instance_id == instance_id)]
             
             if not commodity_items:
                 return {"success": False, "message": f"您没有 {self.commodities[commodity_id]['name']}"}
@@ -223,7 +224,8 @@ class ExchangeInventoryService:
             is_all_expired = (expired_sold == quantity)
             
             # 计算盈亏分析（用于确定税基）
-            profit_loss = self._calculate_profit_loss_analysis(items_to_process, quantity, current_price)
+            # 腐败商品收入为零，税基及盈亏必须使用本次实际收入。
+            profit_loss = self._calculate_profit_loss_analysis(items_to_process, quantity, total_income)
             taxable_profit = max(int(profit_loss.get("profit_loss", 0)), 0)
 
             # 计算税费（仅对盈利部分征税）
@@ -310,15 +312,16 @@ class ExchangeInventoryService:
         try:
             # 获取商品实例
             commodity_item = self.exchange_repo.get_user_commodity_by_instance_id(instance_id)
-            if not commodity_item:
-                return {"success": False, "message": "商品实例不存在"}
+            if not commodity_item or commodity_item.user_id != user_id:
+                return {"success": False, "message": "商品实例不存在或不属于该用户"}
             
             # 检查数量
             if commodity_item.quantity < quantity:
                 return {"success": False, "message": f"库存不足，只有 {commodity_item.quantity} 个"}
             
-            # 调用通用卖出方法
-            return self.sell_commodity(user_id, commodity_item.commodity_id, quantity, current_price)
+            # 复用结算逻辑，但只允许扣减用户指定的这一批库存。
+            return self.sell_commodity(user_id, commodity_item.commodity_id, quantity, current_price,
+                                       instance_id=instance_id)
         except Exception as e:
             logger.error(f"卖出大宗商品失败: {e}")
             return {"success": False, "message": f"卖出失败: {str(e)}"}
@@ -672,7 +675,7 @@ class ExchangeInventoryService:
         
         return inventory_quantity + market_quantity
 
-    def _calculate_profit_loss_analysis(self, commodity_items: List[UserCommodity], sell_quantity: int, sell_price: int) -> Dict[str, Any]:
+    def _calculate_profit_loss_analysis(self, commodity_items: List[UserCommodity], sell_quantity: int, total_income: int) -> Dict[str, Any]:
         """计算卖出时的盈亏分析"""
         total_cost = 0
         remaining_quantity = sell_quantity
@@ -685,7 +688,6 @@ class ExchangeInventoryService:
             total_cost += item.purchase_price * item_quantity
             remaining_quantity -= item_quantity
         
-        total_income = sell_price * sell_quantity
         profit_loss = total_income - total_cost
         profit_rate = (profit_loss / total_cost * 100) if total_cost > 0 else 0
         

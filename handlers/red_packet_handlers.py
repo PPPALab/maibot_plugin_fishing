@@ -4,14 +4,14 @@
 
 from typing import TYPE_CHECKING
 
-from astrbot.api.event import AstrMessageEvent
+from ..events import GameEvent
 from ..utils import parse_amount, parse_count
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-def _get_group_session_id(event: AstrMessageEvent) -> str:
+def _get_group_session_id(event: GameEvent) -> str:
     """
     获取红包的群组会话ID
     在群聊中使用群ID确保所有群成员共享同一个红包池
@@ -27,7 +27,7 @@ def _get_group_session_id(event: AstrMessageEvent) -> str:
         return None
 
 
-async def send_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def send_red_packet(plugin: "FishingPlugin", event: GameEvent):
     """
     发送红包
     用法：
@@ -120,7 +120,7 @@ async def send_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def claim_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def claim_red_packet(plugin: "FishingPlugin", event: GameEvent):
     """
     领取红包
     用法：
@@ -150,8 +150,8 @@ async def claim_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
             if len(args) >= 3:
                 password = args[2]
         except ValueError:
-            # 第一个参数不是数字，当作口令
-            password = args[1]
+            # 第一个参数不是数字，保留完整口令（发红包支持口令包含空格）。
+            password = ' '.join(args[1:])
     
     # 领取红包
     result = plugin.red_packet_service.claim_red_packet(
@@ -164,7 +164,7 @@ async def claim_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def red_packet_details(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def red_packet_details(plugin: "FishingPlugin", event: GameEvent):
     """
     查看红包详情
     用法：/红包详情 [红包ID]
@@ -185,7 +185,7 @@ async def red_packet_details(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def list_red_packets(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def list_red_packets(plugin: "FishingPlugin", event: GameEvent):
     """
     列出当前群组可领取的红包
     用法：/红包列表
@@ -200,7 +200,7 @@ async def list_red_packets(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def revoke_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def revoke_red_packet(plugin: "FishingPlugin", event: GameEvent):
     """
     撤回红包
     用法：/撤回红包 [红包ID]
@@ -226,7 +226,7 @@ async def revoke_red_packet(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def cleanup_red_packets(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def cleanup_red_packets(plugin: "FishingPlugin", event: GameEvent):
     """
     [管理员] 清理红包
     用法：

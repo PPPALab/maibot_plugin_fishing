@@ -1,5 +1,5 @@
 import pytest
-from astrbot_plugin_fishing.utils import parse_amount
+from fishing_port.utils import parse_amount
 
 
 def test_parse_plain_number():

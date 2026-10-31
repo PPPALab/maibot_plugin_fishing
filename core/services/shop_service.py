@@ -579,62 +579,64 @@ class ShopService:
         """发放奖励并返回获得的物品列表"""
         obtained_items = []
         
-        for _ in range(quantity):
-            for reward in rewards:
-                reward_type = reward["reward_type"]
-                reward_item_id = reward.get("reward_item_id")
-                reward_quantity = reward.get("reward_quantity", 1)
-                reward_refine_level = reward.get("reward_refine_level")
-                
-                if reward_type == "rod" and reward_item_id:
-                    rod_tpl = self.item_template_repo.get_rod_by_id(reward_item_id)
+        for reward in rewards:
+            reward_type = reward["reward_type"]
+            reward_item_id = reward.get("reward_item_id")
+            # 按购买份数计算总奖励，发放数量与回执保持一致。
+            reward_quantity = reward.get("reward_quantity", 1) * quantity
+            reward_refine_level = reward.get("reward_refine_level")
+
+            if reward_type == "rod" and reward_item_id:
+                rod_tpl = self.item_template_repo.get_rod_by_id(reward_item_id)
+                for _ in range(reward_quantity):
                     self.inventory_repo.add_rod_instance(
                         user_id=user_id,
                         rod_id=reward_item_id,
                         durability=rod_tpl.durability if rod_tpl else None,
                         refine_level=reward_refine_level or 1,
                     )
-                    if rod_tpl:
-                        obtained_items.append(f"🎣 {rod_tpl.name}")
-                
-                elif reward_type == "accessory" and reward_item_id:
-                    accessory_tpl = self.item_template_repo.get_accessory_by_id(reward_item_id)
+                if rod_tpl:
+                    obtained_items.append(f"🎣 {rod_tpl.name} x{reward_quantity}")
+
+            elif reward_type == "accessory" and reward_item_id:
+                accessory_tpl = self.item_template_repo.get_accessory_by_id(reward_item_id)
+                for _ in range(reward_quantity):
                     self.inventory_repo.add_accessory_instance(
                         user_id, reward_item_id, refine_level=reward_refine_level or 1
                     )
-                    if accessory_tpl:
-                        obtained_items.append(f"💍 {accessory_tpl.name}")
-                
-                elif reward_type == "bait" and reward_item_id:
-                    bait_tpl = self.item_template_repo.get_bait_by_id(reward_item_id)
-                    self.inventory_repo.update_bait_quantity(user_id, reward_item_id, reward_quantity)
-                    if bait_tpl:
-                        obtained_items.append(f"🪱 {bait_tpl.name} x{reward_quantity}")
-                
-                elif reward_type == "item" and reward_item_id:
-                    item_tpl = self.item_template_repo.get_item_by_id(reward_item_id)
-                    self.inventory_repo.update_item_quantity(user_id, reward_item_id, reward_quantity)
-                    if item_tpl:
-                        obtained_items.append(f"🎁 {item_tpl.name} x{reward_quantity}")
-                
-                elif reward_type == "fish" and reward_item_id:
-                    fish_tpl = self.item_template_repo.get_fish_by_id(reward_item_id)
-                    if fish_tpl:
-                        # 从数据库获取奖励的品质等级设置
-                        quality_level = reward.get("quality_level", 0)
-                        # 调用水族箱的库存更新方法
-                        self.inventory_repo.update_aquarium_fish_quantity(user_id, reward_item_id, reward_quantity, quality_level)
-                        
-                        quality_label = " ✨高品质" if quality_level == 1 else ""
-                        obtained_items.append(f"🐠 {fish_tpl.name}{quality_label} x{reward_quantity} (放入水族箱)")
-                
-                elif reward_type == "coins":
-                    # 直接给用户加金币
-                    user = self.user_repo.get_by_id(user_id)
-                    if user:
-                        user.coins += reward_quantity
-                        self.user_repo.update(user)
-                        obtained_items.append(f"💰 金币 x{reward_quantity}")
+                if accessory_tpl:
+                    obtained_items.append(f"💍 {accessory_tpl.name} x{reward_quantity}")
+
+            elif reward_type == "bait" and reward_item_id:
+                bait_tpl = self.item_template_repo.get_bait_by_id(reward_item_id)
+                self.inventory_repo.update_bait_quantity(user_id, reward_item_id, reward_quantity)
+                if bait_tpl:
+                    obtained_items.append(f"🪱 {bait_tpl.name} x{reward_quantity}")
+
+            elif reward_type == "item" and reward_item_id:
+                item_tpl = self.item_template_repo.get_item_by_id(reward_item_id)
+                self.inventory_repo.update_item_quantity(user_id, reward_item_id, reward_quantity)
+                if item_tpl:
+                    obtained_items.append(f"🎁 {item_tpl.name} x{reward_quantity}")
+
+            elif reward_type == "fish" and reward_item_id:
+                fish_tpl = self.item_template_repo.get_fish_by_id(reward_item_id)
+                if fish_tpl:
+                    # 从数据库获取奖励的品质等级设置
+                    quality_level = reward.get("quality_level", 0)
+                    # 调用水族箱的库存更新方法
+                    self.inventory_repo.update_aquarium_fish_quantity(user_id, reward_item_id, reward_quantity, quality_level)
+
+                    quality_label = " ✨高品质" if quality_level == 1 else ""
+                    obtained_items.append(f"🐠 {fish_tpl.name}{quality_label} x{reward_quantity} (放入水族箱)")
+
+            elif reward_type == "coins":
+                # 直接给用户加金币
+                user = self.user_repo.get_by_id(user_id)
+                if user:
+                    user.coins += reward_quantity
+                    self.user_repo.update(user)
+                    obtained_items.append(f"💰 金币 x{reward_quantity}")
         
         return obtained_items
 

@@ -1,6 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     应用此迁移：为 users 表添加命运之轮功能所需的所有字段。

@@ -1,7 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     为道具系统增加效果与增益功能

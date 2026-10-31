@@ -1,9 +1,9 @@
-from astrbot.api.event import AstrMessageEvent
+from ..events import GameEvent
 from typing import Optional, Dict, Any, TYPE_CHECKING, List
 from datetime import datetime, timedelta
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
 class ExchangeHandlers:
@@ -12,7 +12,7 @@ class ExchangeHandlers:
         self.exchange_service = plugin.exchange_service
         self.user_repo = plugin.user_repo
 
-    def _get_effective_user_id(self, event: AstrMessageEvent) -> str:
+    def _get_effective_user_id(self, event: GameEvent) -> str:
         return self.plugin._get_effective_user_id(event)
 
     def _get_sentiment_emoji(self, sentiment: str) -> str:
@@ -184,8 +184,8 @@ class ExchangeHandlers:
                 "is_profit": profit_loss > 0,
             }
         except Exception as e:
-            from astrbot.api import logger
-
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"计算库存盈亏分析失败: {e}")
             return {
                 "total_cost": 0,
@@ -222,7 +222,7 @@ class ExchangeHandlers:
             return max(0, min(len(ticks) - 1, idx))
         return "".join(ticks[scale(v)] for v in values)
 
-    async def _view_price_history(self, event: AstrMessageEvent):
+    async def _view_price_history(self, event: GameEvent):
         """查看价格历史曲线：
         - 交易所 历史 -> 默认7天，显示所有商品
         - 交易所 历史 [天数] -> 显示指定天数，所有商品
@@ -325,7 +325,7 @@ class ExchangeHandlers:
 
         yield event.plain_result(msg)
 
-    async def _view_market_analysis(self, event: AstrMessageEvent):
+    async def _view_market_analysis(self, event: GameEvent):
         """市场分析：
         - 交易所 分析 -> 默认分析全部商品，7天窗口
         - 交易所 分析 [商品] -> 分析单商品，7天窗口
@@ -466,7 +466,7 @@ class ExchangeHandlers:
 
         yield event.plain_result(msg)
 
-    async def exchange_main(self, event: AstrMessageEvent):
+    async def exchange_main(self, event: GameEvent):
         """交易所主命令，根据参数分发到不同功能"""
         args = event.message_str.split()
 
@@ -549,7 +549,7 @@ class ExchangeHandlers:
 💬 使用【交易所 帮助 [分类]】查看详细说明
     """
 
-    async def exchange_status(self, event: AstrMessageEvent):
+    async def exchange_status(self, event: GameEvent):
         """查看交易所当前状态"""
         try:
             user_id = self._get_effective_user_id(event)
@@ -706,11 +706,12 @@ class ExchangeHandlers:
 
             yield event.plain_result(msg)
         except Exception as e:
-            from astrbot.api import logger
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"交易所状态查询失败: {e}")
             yield event.plain_result(f"❌ 查询失败: {str(e)}")
 
-    async def open_exchange_account(self, event: AstrMessageEvent):
+    async def open_exchange_account(self, event: GameEvent):
         """开通交易所账户"""
         user_id = self._get_effective_user_id(event)
         result = self.exchange_service.open_exchange_account(user_id)
@@ -720,11 +721,11 @@ class ExchangeHandlers:
             else f"❌ {result['message']}"
         )
 
-    async def view_inventory(self, event: AstrMessageEvent):
+    async def view_inventory(self, event: GameEvent):
         """查看大宗商品库存"""
         try:
-            from astrbot.api import logger
-
+            import logging
+            logger = logging.getLogger(__name__)
             user_id = self._get_effective_user_id(event)
 
             result = self.exchange_service.get_user_inventory(user_id)
@@ -840,12 +841,12 @@ class ExchangeHandlers:
             yield event.plain_result(msg)
 
         except Exception as e:
-            from astrbot.api import logger
-
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"持仓命令执行失败: {e}")
             yield event.plain_result(f"❌ 持仓命令执行失败: {e}")
 
-    async def buy_commodity(self, event: AstrMessageEvent):
+    async def buy_commodity(self, event: GameEvent):
         """购买大宗商品"""
         user_id = self._get_effective_user_id(event)
         args = event.message_str.split()
@@ -897,7 +898,7 @@ class ExchangeHandlers:
             else f"❌ {result['message']}"
         )
 
-    async def sell_commodity(self, event: AstrMessageEvent):
+    async def sell_commodity(self, event: GameEvent):
         """卖出大宗商品"""
         try:
             user_id = self._get_effective_user_id(event)
@@ -990,11 +991,12 @@ class ExchangeHandlers:
             else:
                 yield event.plain_result("❌ 命令格式错误，请使用帮助查看。")
         except Exception as e:
-            from astrbot.api import logger
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"卖出大宗商品失败: {e}")
             yield event.plain_result(f"❌ 卖出失败: {str(e)}")
 
-    async def clear_inventory(self, event: AstrMessageEvent):
+    async def clear_inventory(self, event: GameEvent):
         """清仓功能"""
         user_id = self._get_effective_user_id(event)
         args = event.message_str.split()

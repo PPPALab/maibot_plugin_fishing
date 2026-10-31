@@ -3,8 +3,9 @@
 创建红包系统相关表，包括红包表和红包领取记录表
 """
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 def up(cursor):
     """创建红包系统表"""
     

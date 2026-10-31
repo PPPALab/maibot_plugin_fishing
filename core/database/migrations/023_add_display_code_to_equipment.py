@@ -1,4 +1,6 @@
 import sqlite3
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _to_base36(n: int) -> str:
@@ -28,7 +30,8 @@ def up(cursor: sqlite3.Cursor):
     - 饰品：A + base36(accessory_instance_id)
     均使用大写并建立唯一索引。
     """
-    from astrbot.api import logger
+    import logging
+    logger = logging.getLogger(__name__)
     logger.info("执行 023_add_display_code_to_equipment: 添加 display_code 并回填...")
 
     # 1) 添加列
@@ -88,5 +91,4 @@ def down(cursor: sqlite3.Cursor):
     except Exception:
         pass
     logger.info("023_add_display_code_to_equipment: 索引已移除（列保留）。")
-
 

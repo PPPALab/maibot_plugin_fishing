@@ -5,8 +5,8 @@ import inspect
 import sqlite3
 from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 # 导入仓储接口和领域模型
 from ..repositories.abstract_repository import (
     AbstractAchievementRepository,

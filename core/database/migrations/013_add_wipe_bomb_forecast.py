@@ -1,6 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     Adds the wipe_bomb_forecast column to the users table.

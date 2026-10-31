@@ -1,12 +1,12 @@
-from astrbot.api.event import filter, AstrMessageEvent
+from ..events import GameEvent
 from ..utils import format_rarity_display, parse_target_user_id, parse_amount
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def sell_all(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_all(plugin: "FishingPlugin", event: GameEvent):
     """卖出用户所有鱼"""
     user_id = plugin._get_effective_user_id(event)
     if result := plugin.inventory_service.sell_all_fish(user_id):
@@ -15,7 +15,7 @@ async def sell_all(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def sell_keep(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_keep(plugin: "FishingPlugin", event: GameEvent):
     """卖出用户鱼，但保留每种鱼一条"""
     user_id = plugin._get_effective_user_id(event)
     if result := plugin.inventory_service.sell_all_fish(user_id, keep_one=True):
@@ -24,7 +24,7 @@ async def sell_keep(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def sell_everything(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_everything(plugin: "FishingPlugin", event: GameEvent):
     """砸锅卖铁：出售所有未锁定且未装备的鱼竿、饰品和全部鱼类"""
     user_id = plugin._get_effective_user_id(event)
     if result := plugin.inventory_service.sell_everything_except_locked(user_id):
@@ -36,7 +36,7 @@ async def sell_everything(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def sell_by_rarity(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_by_rarity(plugin: "FishingPlugin", event: GameEvent):
     """按一个或多个稀有度出售鱼"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split()  # 使用 split() 可以更好地处理多个空格
@@ -79,7 +79,7 @@ async def sell_by_rarity(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 处理命令时发生未知错误: {e}")
 
 
-async def sell_all_rods(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_all_rods(plugin: "FishingPlugin", event: GameEvent):
     """出售用户所有鱼竿"""
     user_id = plugin._get_effective_user_id(event)
     result = plugin.inventory_service.sell_all_rods(user_id)
@@ -89,7 +89,7 @@ async def sell_all_rods(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def sell_all_accessories(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sell_all_accessories(plugin: "FishingPlugin", event: GameEvent):
     """出售用户所有饰品"""
     user_id = plugin._get_effective_user_id(event)
     result = plugin.inventory_service.sell_all_accessories(user_id)
@@ -99,7 +99,7 @@ async def sell_all_accessories(plugin: "FishingPlugin", event: AstrMessageEvent)
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def shop(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def shop(plugin: "FishingPlugin", event: GameEvent):
     """查看商店：/商店 [商店ID]"""
     args = event.message_str.split(" ")
     # /商店 → 列表
@@ -508,7 +508,7 @@ async def shop(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(msg)
 
 
-async def buy_in_shop(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def buy_in_shop(plugin: "FishingPlugin", event: GameEvent):
     """按商店池购买：/商店购买 <商店ID> <商品ID> [数量]"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -542,7 +542,7 @@ async def buy_in_shop(plugin: "FishingPlugin", event: AstrMessageEvent):
             yield event.plain_result(f"❌ {error_message}")
 
 
-async def market(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def market(plugin: "FishingPlugin", event: GameEvent):
     """查看市场"""
     result = plugin.market_service.get_market_listings()
     if not result.get("success"):
@@ -657,7 +657,7 @@ async def market(plugin: "FishingPlugin", event: AstrMessageEvent):
 
 
 async def list_any(
-    plugin: "FishingPlugin", event: AstrMessageEvent, is_anonymous: bool = False
+    plugin: "FishingPlugin", event: GameEvent, is_anonymous: bool = False
 ):
     """统一上架命令：/上架 <ID> <价格> [数量] [匿名]
     - Rxxxx: 魚竿實例
@@ -822,7 +822,7 @@ async def list_any(
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def buy_item(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def buy_item(plugin: "FishingPlugin", event: GameEvent):
     """购买市场上的物品"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -848,7 +848,7 @@ async def buy_item(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def my_listings(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def my_listings(plugin: "FishingPlugin", event: GameEvent):
     """查看我在市场上架的商品"""
     user_id = plugin._get_effective_user_id(event)
     result = plugin.market_service.get_user_listings(user_id)
@@ -892,7 +892,7 @@ async def my_listings(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 查询失败：{result['message']}")
 
 
-async def delist_item(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def delist_item(plugin: "FishingPlugin", event: GameEvent):
     """下架市场上的商品"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")

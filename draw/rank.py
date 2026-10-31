@@ -2,7 +2,8 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Dict
-from astrbot.api import logger
+import logging
+logger = logging.getLogger(__name__)
 from .styles import (
     IMG_WIDTH, PADDING, CORNER_RADIUS,
     HEADER_HEIGHT, USER_CARD_HEIGHT, USER_CARD_MARGIN,

@@ -1,13 +1,13 @@
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api import logger
+from ..events import GameEvent
+import logging
+logger = logging.getLogger(__name__)
 from ..core.utils import get_now
 from ..utils import safe_datetime_handler, to_percentage, safe_get_file_path
 from ..draw.pokedex import draw_pokedex
-from astrbot.api.message_components import Image as AstrImage
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
 def _normalize_now_for(lst_time):
@@ -42,6 +42,11 @@ def _build_fish_message(result, fishing_cost):
             f"💰价值：{fish['value']} 金币\n"
             f"💸消耗：{fishing_cost} 金币/次"
         )
+        if fish.get('quantity', 1) > 1:
+            message += f"\n🐟 数量：{fish['quantity']} 条"
+        released = fish.get('quantity', 1) - fish.get('stored_quantity', fish.get('quantity', 1))
+        if released > 0:
+            message += f"\n🌊 鱼塘容量不足，本次渔获放生 {released} 条"
         if "equipment_broken_messages" in result:
             for broken_msg in result["equipment_broken_messages"]:
                 message += f"\n{broken_msg}"
@@ -67,7 +72,7 @@ class FishingHandlers:
         zone = self.plugin.inventory_repo.get_zone_by_id(user.fishing_zone_id)
         return zone.fishing_cost if zone else 10
 
-    async def fish(self, event: AstrMessageEvent):
+    async def fish(self, event: GameEvent):
         """钓鱼"""
         user_id = self.plugin._get_effective_user_id(event)
         user = self.plugin.user_repo.get_by_id(user_id)
@@ -96,13 +101,13 @@ class FishingHandlers:
             return
         yield event.plain_result(_build_fish_message(result, fishing_cost))
 
-    async def auto_fish(self, event: AstrMessageEvent):
+    async def auto_fish(self, event: GameEvent):
         """自动钓鱼"""
         user_id = self.plugin._get_effective_user_id(event)
         result = self.fishing_service.toggle_auto_fishing(user_id)
         yield event.plain_result(result["message"])
 
-    async def fishing_area(self, event: AstrMessageEvent):
+    async def fishing_area(self, event: GameEvent):
         """查看当前钓鱼区域"""
         user_id = self.plugin._get_effective_user_id(event)
         args = event.message_str.split(" ")
@@ -175,7 +180,7 @@ class FishingHandlers:
         result = self.fishing_service.set_user_fishing_zone(user_id, zone_id)
         yield event.plain_result(result["message"] if result else "❌ 出错啦！请稍后再试。")
 
-    async def fish_pokedex(self, event: AstrMessageEvent):
+    async def fish_pokedex(self, event: GameEvent):
         """查看鱼类图鉴"""
         user_id = self.plugin._get_effective_user_id(event)
         args = event.message_str.split()
@@ -206,7 +211,7 @@ class FishingHandlers:
                 {"nickname": user_info.nickname, "user_id": user_id},
                 output_path,
                 page=page,
-                data_dir=self.plugin.data_dir,
+                data_dir=self.plugin.runtime_dir,
             )
             yield event.image_result(output_path)
         except Exception as e:

@@ -5,14 +5,14 @@ from typing import Dict, Any
 from datetime import datetime, timedelta
 import csv
 import io
+import hmac
 
 from quart import (
     Quart, render_template, request, redirect, url_for, session, flash,
     Blueprint, current_app, jsonify
 )
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 admin_bp = Blueprint(
     "admin_bp",
     __name__,
@@ -95,21 +95,22 @@ def admin_required(f):
 async def login():
     if request.method == "POST":
         form = await request.form
-        # 从应用配置中获取密钥
+        # 配置字段沿用旧名；UTF-8字节比较同时支持中文密码。
         secret_key = current_app.config["SECRET_LOGIN_KEY"]
-        if form.get("secret_key") == secret_key:
+        if secret_key and hmac.compare_digest(str(form.get("secret_key", "")).encode('utf-8'), secret_key.encode('utf-8')):
+            session.permanent = True
             session["logged_in"] = True
-            # 简单角色标记：现阶段使用同一密钥视为管理员
+            # 简单角色标记：现阶段使用同一密码视为管理员
             session["is_admin"] = True
             await flash("登录成功！", "success")
             return redirect(url_for("admin_bp.index"))
         else:
-            await flash("登录失败，请检查密钥！", "danger")
+            await flash("登录失败，请检查密码！", "danger")
     return await render_template("login.html")
 
 @admin_bp.route("/logout")
 async def logout():
-    session.pop("logged_in", None)
+    session.clear()
     await flash("你已成功登出。", "info")
     return redirect(url_for("admin_bp.login"))
 

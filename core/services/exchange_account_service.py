@@ -1,7 +1,8 @@
 from typing import Dict, Any
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 from ..domain.models import User
 from ..repositories.abstract_repository import AbstractUserRepository
 

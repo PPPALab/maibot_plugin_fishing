@@ -3,7 +3,9 @@ from datetime import datetime, timedelta
 import random
 import math
 
-from astrbot.api import logger
+import logging
+
+logger = logging.getLogger(__name__)
 # 导入仓储接口和领域模型
 from ..repositories.abstract_repository import (
     AbstractMarketRepository,
@@ -208,18 +210,11 @@ class MarketService:
             return {"success": False, "message": "大宗商品不存在或不属于你"}
         if user_commodity.quantity < quantity:
             return {"success": False, "message": f"数量不足，您只有 {user_commodity.quantity} 份"}
+        if self.get_market_id_by_instance_id("commodity", item_instance_id) is not None:
+            return {"success": False, "message": "该批大宗商品已有市场挂单，请先下架或等待成交"}
         
         commodity_template = self.exchange_repo.get_commodity_by_id(user_commodity.commodity_id)
         item_template_id = user_commodity.commodity_id
-        
-        # 计算剩余数量
-        remaining_quantity = user_commodity.quantity - quantity
-        
-        # 从用户库存中扣除
-        if remaining_quantity > 0:
-            self.exchange_repo.update_user_commodity_quantity(item_instance_id, remaining_quantity)
-        else:
-            self.exchange_repo.delete_user_commodity(item_instance_id)
         
         return {
             "success": True,
@@ -243,7 +238,12 @@ class MarketService:
         elif item_type == "fish":
             self.inventory_repo.update_fish_quantity(user_id, item_instance_id, -quantity, quality_level)
         elif item_type == "commodity":
-            self.exchange_repo.delete_user_commodity(item_instance_id)
+            commodity = self.exchange_repo.get_user_commodity_by_instance_id(item_instance_id)
+            remaining_quantity = commodity.quantity - quantity
+            if remaining_quantity > 0:
+                self.exchange_repo.update_user_commodity_quantity(item_instance_id, remaining_quantity)
+            else:
+                self.exchange_repo.delete_user_commodity(item_instance_id)
 
     def put_item_on_sale(self, user_id: str, item_type: str, item_instance_id: int, price: int, is_anonymous: bool = False, quantity: int = 1, quality_level: int = 0) -> Dict[str, Any]:
         """

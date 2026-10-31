@@ -1,9 +1,9 @@
-from astrbot.api.event import filter, AstrMessageEvent
+from ..events import GameEvent
 from ..utils import parse_target_user_id, to_percentage, safe_datetime_handler
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
 def _get_field(obj, key, default=None):
@@ -44,7 +44,7 @@ def _format_pool_details(pool, probabilities):
     return message
 
 
-async def gacha(self: "FishingPlugin", event: AstrMessageEvent):
+async def gacha(self: "FishingPlugin", event: GameEvent):
     """抽卡"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -83,7 +83,7 @@ async def gacha(self: "FishingPlugin", event: AstrMessageEvent):
                     # 金币类型的物品
                     message += f"⭐ {item['quantity']} 金币！\n"
                 else:
-                    message += f"{'⭐' * item.get('rarity', 1)} {item['name']}\n"
+                    message += f"{'⭐' * item.get('rarity', 1)} {item['name']} x{item.get('quantity', 1)}\n"
             yield event.plain_result(message)
         else:
             yield event.plain_result(f"❌ 抽卡失败：{result['message']}")
@@ -91,7 +91,7 @@ async def gacha(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def ten_gacha(self: "FishingPlugin", event: AstrMessageEvent):
+async def ten_gacha(self: "FishingPlugin", event: GameEvent):
     """十连抽卡"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -137,7 +137,7 @@ async def ten_gacha(self: "FishingPlugin", event: AstrMessageEvent):
                     # 金币类型的物品
                     message += f"⭐ {item['quantity']} 金币！\n"
                 else:
-                    message += f"{'⭐' * item.get('rarity', 1)} {item['name']}\n"
+                    message += f"{'⭐' * item.get('rarity', 1)} {item['name']} x{item.get('quantity', 1)}\n"
             yield event.plain_result(message)
         else:
             yield event.plain_result(f"❌ 抽卡失败：{result['message']}")
@@ -145,7 +145,7 @@ async def ten_gacha(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def multi_ten_gacha(self: "FishingPlugin", event: AstrMessageEvent, pool_id: int, times: int):
+async def multi_ten_gacha(self: "FishingPlugin", event: GameEvent, pool_id: int, times: int):
     """多次十连抽卡，使用合并统计"""
     user_id = self._get_effective_user_id(event)
     
@@ -173,38 +173,27 @@ async def multi_ten_gacha(self: "FishingPlugin", event: AstrMessageEvent, pool_i
     rarity_counts = {i: 0 for i in range(1, 11)}  # 稀有度统计，支持1-10星
     coin_total = 0
     
-    # 执行多次十连抽卡
-    for i in range(times):
-        if result := self.gacha_service.perform_draw(user_id, pool_id, num_draws=10):
-            if result["success"]:
-                items = result.get("results", [])
-                total_items += len(items)
-                
-                for item in items:
-                    if item.get("type") == "coins":
-                        coin_total += item['quantity']
-                    else:
-                        item_name = item['name']
-                        rarity = item.get('rarity', 1)
-                        
-                        # 统计物品数量
-                        if item_name in item_counts:
-                            item_counts[item_name] += 1
-                        else:
-                            item_counts[item_name] = 1
-                        
-                        # 统计稀有度
-                        if rarity in rarity_counts:
-                            rarity_counts[rarity] += 1
-                        elif rarity > 10:
-                            # 超过10星的物品归类到10星
-                            rarity_counts[10] += 1
-            else:
-                yield event.plain_result(f"❌ 第{i+1}次十连抽卡失败：{result['message']}")
-                return
+    # 整条命令一次校验总费用并结算，避免后续十连失败却已扣除前批费用。
+    result = self.gacha_service.perform_draw(user_id, pool_id, num_draws=total_draws)
+    if not result or not result['success']:
+        reason = result['message'] if result else '请稍后再试'
+        yield event.plain_result(f"❌ 多次十连抽卡失败：{reason}")
+        return
+    for item in result.get('results', []):
+        if item.get('type') == 'coins':
+            coin_total += item['quantity']
         else:
-            yield event.plain_result(f"❌ 第{i+1}次十连抽卡出错！")
-            return
+            item_name = item['name']
+            rarity = item.get('rarity', 1)
+            quantity = item.get('quantity', 1)
+            total_items += quantity
+            # 统计物品数量
+            item_counts[item_name] = item_counts.get(item_name, 0) + quantity
+            # 统计稀有度；超过10星的物品归类到10星。
+            if rarity in rarity_counts:
+                rarity_counts[rarity] += quantity
+            elif rarity > 10:
+                rarity_counts[10] += quantity
     
     # 生成合并统计报告
     message = f"🎉 {times}次十连抽卡完成！共获得 {total_items} 件物品：\n\n"
@@ -236,7 +225,7 @@ async def multi_ten_gacha(self: "FishingPlugin", event: AstrMessageEvent, pool_i
     yield event.plain_result(message)
 
 
-async def view_gacha_pool(self: "FishingPlugin", event: AstrMessageEvent):
+async def view_gacha_pool(self: "FishingPlugin", event: GameEvent):
     """查看当前卡池"""
     args = event.message_str.split(" ")
     if len(args) < 2:
@@ -258,7 +247,7 @@ async def view_gacha_pool(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def gacha_history(self: "FishingPlugin", event: AstrMessageEvent):
+async def gacha_history(self: "FishingPlugin", event: GameEvent):
     """查看抽卡记录"""
     user_id = self._get_effective_user_id(event)
     if result := self.gacha_service.get_user_gacha_history(user_id):
@@ -281,7 +270,7 @@ async def gacha_history(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def wipe_bomb(self: "FishingPlugin", event: AstrMessageEvent):
+async def wipe_bomb(self: "FishingPlugin", event: GameEvent):
     """擦弹功能"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -343,7 +332,7 @@ async def wipe_bomb(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def wipe_bomb_history(self: "FishingPlugin", event: AstrMessageEvent):
+async def wipe_bomb_history(self: "FishingPlugin", event: GameEvent):
     """查看擦弹记录"""
     user_id = self._get_effective_user_id(event)
     if result := self.game_mechanics_service.get_wipe_bomb_history(user_id):
@@ -375,7 +364,7 @@ async def wipe_bomb_history(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def start_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent):
+async def start_wheel_of_fate(self: "FishingPlugin", event: GameEvent):
     """处理开始命运之轮游戏的指令，并提供玩法说明。"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -412,7 +401,7 @@ async def start_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent):
         formatted_message = result["message"].replace(f"[CQ:at,qq={user_id}]", f"@{user_nickname}")
         yield event.plain_result(formatted_message)
 
-async def continue_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent):
+async def continue_wheel_of_fate(self: "FishingPlugin", event: GameEvent):
     """处理命运之轮的“继续”指令"""
     user_id = self._get_effective_user_id(event)
     # 直接将请求交给 Service 层，它会处理所有逻辑
@@ -423,7 +412,7 @@ async def continue_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent)
         formatted_message = result["message"].replace(f"[CQ:at,qq={user_id}]", f"@{user_nickname}")
         yield event.plain_result(formatted_message)
 
-async def stop_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent):
+async def stop_wheel_of_fate(self: "FishingPlugin", event: GameEvent):
     """处理命运之轮的“放弃”指令"""
     user_id = self._get_effective_user_id(event)
     # 直接将请求交给 Service 层，它会处理所有逻辑
@@ -434,7 +423,7 @@ async def stop_wheel_of_fate(self: "FishingPlugin", event: AstrMessageEvent):
         formatted_message = result["message"].replace(f"[CQ:at,qq={user_id}]", f"@{user_nickname}")
         yield event.plain_result(formatted_message)
 
-async def sicbo(self: "FishingPlugin", event: AstrMessageEvent):
+async def sicbo(self: "FishingPlugin", event: GameEvent):
     """处理骰宝游戏指令"""
     user_id = self._get_effective_user_id(event)
     args = event.message_str.split(" ")

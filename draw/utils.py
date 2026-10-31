@@ -2,8 +2,8 @@ import os
 import hashlib
 from typing import Optional
 from PIL import Image, ImageDraw
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 async def get_user_avatar(user_id: str, data_dir: str, avatar_size: int = 50) -> Optional[Image.Image]:
     """
     获取用户头像并处理为圆形
@@ -169,3 +169,7 @@ async def get_fish_icon(icon_url: str, data_dir: str, icon_size: int = 60) -> Op
         logger.warning(f"处理图标时发生错误: {e}, URL: {icon_url}")
     
     return None
+
+
+# Original draw callers retain their visual layout; I/O is owned by the port.
+from ..media import get_fish_icon, get_user_avatar  # noqa: E402,F811

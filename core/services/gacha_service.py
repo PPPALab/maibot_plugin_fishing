@@ -2,7 +2,9 @@ import random
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
-from astrbot.api import logger
+import logging
+
+logger = logging.getLogger(__name__)
 # 导入仓储接口和领域模型
 from ..repositories.abstract_repository import (
     AbstractGachaRepository,
@@ -143,29 +145,17 @@ class GachaService:
                     "message": "今天的免费补给已经领过啦，明天再来吧！",
                 }
 
-        # 限时卡池过期校验
-        try:
-            is_limited = bool(getattr(pool, "is_limited_time", 0))
-            open_until_raw = getattr(pool, "open_until", None)
-            if is_limited and open_until_raw:
-                # 解析为本地(UTC+8)时间
-                normalized = open_until_raw.replace("T", " ")
-                dt = None
-                for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
-                    try:
-                        dt = datetime.strptime(normalized, fmt)
-                        break
-                    except ValueError:
-                        continue
-                if dt is not None:
-                    dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
-                    now = get_now()
-                    if now > dt:
-                        display_time = f"{dt.year}/{dt.month:02d}/{dt.day:02d} {dt.hour:02d}:{dt.minute:02d}"
-                        return {"success": False, "message": f"该卡池已结束开放（截止: {display_time}），无法抽卡"}
-        except Exception:
-            # 解析失败时不中断抽卡流程
-            pass
+        # 限时卡池必须有可解析的截止时间；无时区配置按游戏时区解释。
+        if pool.is_limited_time:
+            try:
+                dt = datetime.fromisoformat(pool.open_until)
+            except (TypeError, ValueError):
+                return {"success": False, "message": "限时卡池截止时间无效，请管理员修正配置"}
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone(timedelta(hours=8)))
+            if get_now() >= dt:
+                display_time = dt.astimezone(timezone(timedelta(hours=8))).strftime('%Y/%m/%d %H:%M')
+                return {"success": False, "message": f"该卡池已结束开放（截止: {display_time}），无法抽卡"}
 
         # 计算费用：若配置了高级货币费用，则优先使用高级货币；否则使用金币
         use_premium_currency = (getattr(pool, "cost_premium_currency", 0) or 0) > 0
@@ -207,7 +197,8 @@ class GachaService:
                     "type": "rod",
                     "id": item.item_id,
                     "name": get_rod.name,
-                    "rarity": get_rod.rarity
+                    "rarity": get_rod.rarity,
+                    "quantity": item.quantity,
                 })
             elif item.item_type == "accessory":
                 get_accessory = self.item_template_repo.get_accessory_by_id(item.item_id)
@@ -215,7 +206,8 @@ class GachaService:
                     "type": "accessory",
                     "id": item.item_id,
                     "name": get_accessory.name,
-                    "rarity": get_accessory.rarity
+                    "rarity": get_accessory.rarity,
+                    "quantity": item.quantity,
                 })
             elif item.item_type == "bait":
                 get_bait = self.item_template_repo.get_bait_by_id(item.item_id)
@@ -259,9 +251,11 @@ class GachaService:
             # 新获得的鱼竿应使用模板耐久度（允许为0；None代表无上限/未定义）
             template = self.item_template_repo.get_rod_by_id(item.item_id)
             durability = template.durability if template else None
-            self.inventory_repo.add_rod_instance(user_id, item.item_id, durability)
+            for _ in range(item.quantity):
+                self.inventory_repo.add_rod_instance(user_id, item.item_id, durability)
         elif item.item_type == "accessory":
-            self.inventory_repo.add_accessory_instance(user_id, item.item_id)
+            for _ in range(item.quantity):
+                self.inventory_repo.add_accessory_instance(user_id, item.item_id)
             template = self.item_template_repo.get_accessory_by_id(item.item_id)
         elif item.item_type == "bait":
             self.inventory_repo.update_bait_quantity(user_id, item.item_id, item.quantity)

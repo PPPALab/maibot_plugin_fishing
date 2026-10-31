@@ -3,8 +3,8 @@ import random
 import json
 from typing import Dict, Any, Optional, TYPE_CHECKING
 from concurrent.futures import ThreadPoolExecutor
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 # 导入仓储接口和领域模型
 from ..repositories.abstract_repository import (
     AbstractUserRepository,
@@ -398,26 +398,8 @@ class GameMechanicsService:
         )
         self.log_repo.add_wipe_bomb_log(log_entry)
 
-        # 上传非敏感数据到服务器
-        def upload_data_async():
-            upload_data = {
-                "user_id": user_id,
-                "contribution_amount": contribution_amount,
-                "reward_multiplier": reward_multiplier,
-                "reward_amount": reward_amount,
-                "profit": profit,
-                "timestamp": log_entry.timestamp.isoformat()
-            }
-            api_url = "http://veyu.me/api/record"
-            try:
-                response = requests.post(api_url, json=upload_data)
-                if response.status_code != 200:
-                    logger.info(f"上传数据失败: {response.text}")
-            except Exception as e:
-                logger.error(f"上传数据时发生错误: {e}")
-
-        # 启动异步线程进行数据上传，不阻塞主流程
-        self.thread_pool.submit(upload_data_async)
+        # Native port is offline-first: no undisclosed third-party QQ/economy telemetry.
+        # Gameplay, probability and local logs above are unchanged.
 
         # 10. 构建返回结果
         result = {
@@ -849,7 +831,9 @@ class GameMechanicsService:
         }
         all_fish_in_pond = []
         for item in victim_inventory:
-            all_fish_in_pond.extend([item.fish_id] * item.quantity)
+            # Preserve the quality bucket throughout sampling. The upstream ID-only
+            # pool deducted quality=0 even when only quality=1 existed, minting fish.
+            all_fish_in_pond.extend([(item.fish_id, item.quality_level)] * item.quantity)
 
         # 6. 决定偷取数量并进行初次完全随机抽样
         num_to_steal = 0
@@ -873,12 +857,12 @@ class GameMechanicsService:
         # 7. 检查并修正高星鱼数量
         high_rarity_caught = []
         low_rarity_caught = []
-        for fish_id in initial_catch:
-            template = fish_templates.get(fish_id)
+        for fish_entry in initial_catch:
+            template = fish_templates.get(fish_entry[0])
             if template and template.rarity >= 5:
-                high_rarity_caught.append(fish_id)
+                high_rarity_caught.append(fish_entry)
             else:
-                low_rarity_caught.append(fish_id)
+                low_rarity_caught.append(fish_entry)
         
         final_stolen_fish_ids = []
         if len(high_rarity_caught) <= 1:
@@ -896,11 +880,11 @@ class GameMechanicsService:
             pond_counts.subtract(initial_catch_counts)
 
             replacement_pool = []
-            for fish_id, count in pond_counts.items():
+            for fish_entry, count in pond_counts.items():
                 if count > 0:
-                    template = fish_templates.get(fish_id)
+                    template = fish_templates.get(fish_entry[0])
                     if template and template.rarity < 5:
-                        replacement_pool.extend([fish_id] * count)
+                        replacement_pool.extend([fish_entry] * count)
             
             if replacement_pool:
                 num_can_replace = min(num_to_replace, len(replacement_pool))
@@ -909,21 +893,22 @@ class GameMechanicsService:
 
         # 8. 统计最终偷到的鱼
         stolen_fish_counts = {}
-        for fish_id in final_stolen_fish_ids:
-            stolen_fish_counts[fish_id] = stolen_fish_counts.get(fish_id, 0) + 1
+        for fish_entry in final_stolen_fish_ids:
+            stolen_fish_counts[fish_entry] = stolen_fish_counts.get(fish_entry, 0) + 1
     
         # 9. 执行电鱼事务并计算总价值
         stolen_summary = []
         total_value_stolen = 0
     
-        for fish_id, count in stolen_fish_counts.items():
-            self.inventory_repo.update_fish_quantity(victim_id, fish_id, delta=-count, quality_level=0)
-            self.inventory_repo.add_fish_to_inventory(thief_id, fish_id, quantity=count, quality_level=0)
+        for (fish_id, quality_level), count in stolen_fish_counts.items():
+            self.inventory_repo.update_fish_quantity(victim_id, fish_id, delta=-count, quality_level=quality_level)
+            self.inventory_repo.add_fish_to_inventory(thief_id, fish_id, quantity=count, quality_level=quality_level)
             
             template = fish_templates.get(fish_id)
             if template:
-                stolen_summary.append(f"【{template.name}】x{count}")
-                total_value_stolen += template.base_value * count
+                label = "✨高品质" if quality_level == 1 else ""
+                stolen_summary.append(f"【{label}{template.name}】x{count}")
+                total_value_stolen += template.base_value * count * (2 if quality_level == 1 else 1)
     
         # 10. 更新电鱼的CD时间并保存
         thief.last_electric_fish_time = now

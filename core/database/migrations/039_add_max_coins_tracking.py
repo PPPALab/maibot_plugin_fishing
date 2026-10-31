@@ -3,8 +3,9 @@
 添加 max_coins 字段到 users 表，用于追踪用户历史最高金币数
 """
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 def up(cursor):
     """添加 max_coins 字段"""
     

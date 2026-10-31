@@ -9,8 +9,9 @@ import time
 import aiohttp
 import asyncio
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 async def get_local_ip():
     """异步获取内网IPv4地址"""
     try:
@@ -247,7 +248,7 @@ def format_accessory_or_rod(accessory_or_rod: dict) -> str:
 
 from datetime import datetime, timezone, timedelta  # noqa: E402
 from typing import Union, Optional, Tuple  # noqa: E402
-from astrbot.core.message.components import At  # noqa: E402
+from .events import Mention
 
 def safe_datetime_handler(
     time_input: Union[str, datetime, None],
@@ -392,7 +393,7 @@ def parse_target_user_id(event, args: list, arg_index: int = 1) -> Tuple[Optiona
     if hasattr(message_obj, "message"):
         # 检查消息中是否有At对象
         for comp in message_obj.message:
-            if isinstance(comp, At):
+            if isinstance(comp, Mention):
                 # 排除机器人本身的id
                 if comp.qq != message_obj.self_id:
                     target_id = str(comp.qq)
@@ -406,7 +407,7 @@ def parse_target_user_id(event, args: list, arg_index: int = 1) -> Tuple[Optiona
     if len(args) > arg_index:
         target_user_id = args[arg_index]
         # 接受任意字符串格式的 user_id（支持 QQ 纯数字和钉钉复杂字符串等各种平台）
-        return target_user_id, None
+        return (target_user_id, None) if target_user_id.isdecimal() else (None, "❌ 目标必须是 QQ 数字账号或真实 @ 段")
     
     # 如果既没有@也没有参数，返回错误
     return None, f"❌ 请指定目标用户（用户ID或@用户），例如：/命令 <用户ID> 或 /命令 @用户"

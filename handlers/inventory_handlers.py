@@ -1,14 +1,14 @@
 import os
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.core.message.components import At
+from ..events import GameEvent
+from ..events import Mention
 from ..utils import to_percentage, format_accessory_or_rod, format_rarity_display, parse_amount
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def user_backpack(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def user_backpack(plugin: "FishingPlugin", event: GameEvent):
     """查看用户背包"""
     user_id = plugin._get_effective_user_id(event)
     if user := plugin.user_repo.get_by_id(user_id):
@@ -37,7 +37,7 @@ async def user_backpack(plugin: "FishingPlugin", event: AstrMessageEvent):
                 )
 
             # 生成背包图像
-            image = await draw_backpack_image(backpack_data, plugin.data_dir)
+            image = await draw_backpack_image(backpack_data, plugin.runtime_dir)
             # 保存图像到临时文件
             image_path = os.path.join(plugin.tmp_dir, "user_backpack.png")
             image.save(image_path)
@@ -68,8 +68,8 @@ async def user_backpack(plugin: "FishingPlugin", event: AstrMessageEvent):
                 )
         except Exception as e:
             # 记录错误日志
-            from astrbot.api import logger
-
+            import logging
+            logger = logging.getLogger(__name__)
             logger.error(f"生成背包图片时发生错误: {e}", exc_info=True)
 
             # 返回错误信息
@@ -87,7 +87,7 @@ async def user_backpack(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 您还没有注册，请先使用 /注册 命令注册。")
 
 
-async def pond(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def pond(plugin: "FishingPlugin", event: GameEvent):
     """查看用户鱼塘内的鱼"""
     user_id = plugin._get_effective_user_id(event)
     if pond_fish := plugin.inventory_service.get_user_fish_pond(user_id):
@@ -126,7 +126,7 @@ async def pond(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("🐟 您的鱼塘是空的，快去钓鱼吧！")
 
 
-async def peek_pond(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def peek_pond(plugin: "FishingPlugin", event: GameEvent):
     """偷看他人鱼塘内的鱼"""
     user_id = plugin._get_effective_user_id(event)
     message_obj = event.message_obj
@@ -136,7 +136,7 @@ async def peek_pond(plugin: "FishingPlugin", event: AstrMessageEvent):
     if hasattr(message_obj, "message"):
         # 检查消息中是否有At对象
         for comp in message_obj.message:
-            if isinstance(comp, At):
+            if isinstance(comp, Mention):
                 # 排除机器人本身的id
                 if comp.qq != message_obj.self_id:
                     target_user_id = str(comp.qq)
@@ -202,7 +202,7 @@ async def peek_pond(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"🐟 {target_user.nickname} 的鱼塘是空的！")
 
 
-async def pond_capacity(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def pond_capacity(plugin: "FishingPlugin", event: GameEvent):
     """查看用户鱼塘容量"""
     user_id = plugin._get_effective_user_id(event)
     pond_capacity = plugin.inventory_service.get_user_fish_pond_capacity(user_id)
@@ -213,7 +213,7 @@ async def pond_capacity(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def upgrade_pond(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def upgrade_pond(plugin: "FishingPlugin", event: GameEvent):
     """升级鱼塘容量"""
     user_id = plugin._get_effective_user_id(event)
     result = plugin.inventory_service.upgrade_fish_pond(user_id)
@@ -225,7 +225,7 @@ async def upgrade_pond(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 升级失败：{result['message']}")
 
 
-async def rod(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def rod(plugin: "FishingPlugin", event: GameEvent):
     """查看用户鱼竿信息"""
     user_id = plugin._get_effective_user_id(event)
     rod_info = plugin.inventory_service.get_user_rod_inventory(user_id)
@@ -284,7 +284,7 @@ async def rod(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("🎣 您还没有鱼竿，快去商店购买或抽奖获得吧！")
 
 
-async def bait(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bait(plugin: "FishingPlugin", event: GameEvent):
     """查看用户鱼饵信息"""
     user_id = plugin._get_effective_user_id(event)
     bait_info = plugin.inventory_service.get_user_bait_inventory(user_id)
@@ -306,7 +306,7 @@ async def bait(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("🐟 您还没有鱼饵，快去商店购买或抽奖获得吧！")
 
 
-async def items(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def items(plugin: "FishingPlugin", event: GameEvent):
     """查看用户道具信息（文本版）"""
     user_id = plugin._get_effective_user_id(event)
     item_info = plugin.inventory_service.get_user_item_inventory(user_id)
@@ -325,7 +325,7 @@ async def items(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("📦 您还没有道具。")
 
 
-async def use_item(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def use_item(plugin: "FishingPlugin", event: GameEvent):
     """使用一个或多个道具"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -360,7 +360,7 @@ async def use_item(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 使用道具失败：{error_message}")
 
 
-async def open_all_money_bags(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def open_all_money_bags(plugin: "FishingPlugin", event: GameEvent):
     """开启全部钱袋：/开启全部钱袋"""
     user_id = plugin._get_effective_user_id(event)
 
@@ -373,7 +373,7 @@ async def open_all_money_bags(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 开启钱袋失败：{error_message}")
 
 
-async def accessories(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def accessories(plugin: "FishingPlugin", event: GameEvent):
     """查看用户饰品信息"""
     user_id = plugin._get_effective_user_id(event)
     accessories_info = plugin.inventory_service.get_user_accessory_inventory(user_id)
@@ -427,7 +427,7 @@ async def accessories(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("💍 您还没有饰品，快去商店购买或抽奖获得吧！")
 
 
-async def refine_help(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def refine_help(plugin: "FishingPlugin", event: GameEvent):
     """精炼系统帮助（当前版本）"""
     help_message = """🔨 精炼系统指南（当前版本）
 
@@ -521,7 +521,7 @@ async def refine_help(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(help_message)
 
 
-async def use_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipment_type: str = None):
+async def use_equipment(plugin: "FishingPlugin", event: GameEvent, equipment_type: str = None):
     """统一使用命令 - 根据短码前缀自动判断类型"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -645,7 +645,7 @@ async def use_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipm
             yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def use_bait(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def use_bait(plugin: "FishingPlugin", event: GameEvent):
     """使用鱼饵"""
     user_id = plugin._get_effective_user_id(event)
     bait_info = plugin.inventory_service.get_user_bait_inventory(user_id)
@@ -669,7 +669,7 @@ async def use_bait(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def refine_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipment_type: str = None):
+async def refine_equipment(plugin: "FishingPlugin", event: GameEvent, equipment_type: str = None):
     """统一精炼装备命令 - 根据短码前缀自动判断类型"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -726,7 +726,7 @@ async def refine_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equ
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def sell_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipment_type: str = None):
+async def sell_equipment(plugin: "FishingPlugin", event: GameEvent, equipment_type: str = None):
     """统一出售物品命令 - 根据短码前缀自动判断类型"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -822,7 +822,7 @@ async def sell_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equip
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def lock_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipment_type: str = None):
+async def lock_equipment(plugin: "FishingPlugin", event: GameEvent, equipment_type: str = None):
     """统一锁定装备命令 - 根据短码前缀自动判断类型"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -881,7 +881,7 @@ async def lock_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equip
         yield event.plain_result(f"❌ 锁定失败：{result['message']}")
 
 
-async def unlock_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equipment_type: str = None):
+async def unlock_equipment(plugin: "FishingPlugin", event: GameEvent, equipment_type: str = None):
     """统一解锁装备命令 - 根据短码前缀自动判断类型"""
     user_id = plugin._get_effective_user_id(event)
     args = event.message_str.split(" ")
@@ -940,7 +940,7 @@ async def unlock_equipment(plugin: "FishingPlugin", event: AstrMessageEvent, equ
         yield event.plain_result(f"❌ 解锁失败：{result['message']}")
 
 
-async def coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def coins(plugin: "FishingPlugin", event: GameEvent):
     """查看用户金币信息"""
     user_id = plugin._get_effective_user_id(event)
     if user := plugin.user_repo.get_by_id(user_id):
@@ -949,7 +949,7 @@ async def coins(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 您还没有注册，请先使用 /注册 命令注册。")
 
 
-async def premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def premium(plugin: "FishingPlugin", event: GameEvent):
     """查看用户高级货币信息"""
     user_id = plugin._get_effective_user_id(event)
     if user := plugin.user_repo.get_by_id(user_id):

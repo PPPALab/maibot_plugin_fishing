@@ -5,8 +5,8 @@ import threading
 import time
 from typing import Dict, Any, Optional
 from datetime import timedelta
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 # 导入仓储接口和领域模型
 from ..repositories.abstract_repository import (
     AbstractUserRepository,
@@ -43,7 +43,6 @@ class FishingService:
 
         # 获取每日刷新时间配置
         self.daily_reset_hour = self.config.get("daily_reset_hour", 0)
-        self.last_reset_time = get_last_reset_time(self.daily_reset_hour)
         # 自动钓鱼线程相关属性
         self.auto_fishing_thread: Optional[threading.Thread] = None
         self.auto_fishing_running = False
@@ -188,64 +187,51 @@ class FishingService:
                 coins_chance += calculate_after_refine(acc_template.bonus_coin_modifier, refine_level= equipped_accessory_instance.refine_level, rarity=acc_template.rarity)
         logger.debug(f"装备饰品加成后： quality_modifier={quality_modifier}, quantity_modifier={quantity_modifier}, rare_chance={rare_chance}, coins_chance={coins_chance}")
         # 获取鱼饵并应用加成
-        cur_bait_id = user.current_bait_id
         garbage_reduction_modifier = None
-
-        # 判断鱼饵是否过期
+        bait_template = None
+        bait_inventory = self.inventory_repo.get_user_bait_inventory(user_id)
+        # 先校验当前鱼饵库存及有效期，再自动选饵，最后统一结算本次消耗。
         if user.current_bait_id is not None:
-            bait_template = self.item_template_repo.get_bait_by_id(cur_bait_id)
-            if bait_template and bait_template.duration_minutes > 0:
-                # 检查鱼饵是否过期
-                bait_expiry_time = user.bait_start_time
-                if bait_expiry_time:
-                    now = get_now()
-                    expiry_time = bait_expiry_time + timedelta(minutes=bait_template.duration_minutes)
-                    # 移除两个时间的时区信息
-                    if now.tzinfo is not None:
-                        now = now.replace(tzinfo=None)
-                    if expiry_time.tzinfo is not None:
-                        expiry_time = expiry_time.replace(tzinfo=None)
-                    if now > expiry_time:
-                        # 鱼饵已过期，清除当前鱼饵
-                        user.current_bait_id = None
-                        user.bait_start_time = None
-                        self.inventory_repo.update_bait_quantity(user_id, cur_bait_id, -1)
-                        self.user_repo.update(user)
-                        logger.warning(f"用户 {user_id} 的当前鱼饵{bait_template}已过期，已被清除。")
-            else:
-                if bait_template:
-                    # 如果鱼饵没有设置持续时间, 是一次性鱼饵，消耗一个鱼饵
-                    user_bait_inventory = self.inventory_repo.get_user_bait_inventory(user_id)
-                    if user_bait_inventory is not None and user_bait_inventory.get(user.current_bait_id, 0) > 0:
+            bait_template = self.item_template_repo.get_bait_by_id(user.current_bait_id)
+            if not bait_template or bait_inventory.get(user.current_bait_id, 0) <= 0:
+                user.current_bait_id = None
+                user.bait_start_time = None
+                bait_template = None
+            elif bait_template.duration_minutes > 0:
+                # 修复旧版自动选饵留下的空时间；从本次使用开始正常计时。
+                if user.bait_start_time is None:
+                    user.bait_start_time = get_now()
+                now = get_now()
+                # 旧版无时区时间按游戏时区解释；新时间保留时区参与比较。
+                if user.bait_start_time.tzinfo is None:
+                    user.bait_start_time = user.bait_start_time.replace(tzinfo=now.tzinfo)
+                if now >= user.bait_start_time + timedelta(minutes=bait_template.duration_minutes):
+                    # 限时消耗型鱼饵在到期时消耗一个，然后清除当前状态。
+                    if bait_template.is_consumable:
                         self.inventory_repo.update_bait_quantity(user_id, user.current_bait_id, -1)
-                    else:
-                        # 如果用户没有库存鱼饵，清除当前鱼饵
-                        user.current_bait_id = None
-                        user.bait_start_time = None
-                        self.user_repo.update(user)
-                        logger.warning(f"用户 {user_id} 的当前鱼饵{bait_template.bait_id}已被清除，因为库存不足。")
-                else:
-                    # 如果鱼饵模板不存在，清除当前鱼饵
+                    logger.info("用户 %s 的鱼饵 %s 已到期", user_id, user.current_bait_id)
                     user.current_bait_id = None
                     user.bait_start_time = None
-                    self.user_repo.update(user)
-                    logger.warning(f"用户 {user_id} 的当前鱼饵已被清除，因为鱼饵模板不存在。")
+                    bait_template = None
 
         if user.current_bait_id is None:
             # 随机获取一个库存鱼饵
             random_bait_id = self.inventory_repo.get_random_bait(user.user_id)
             if random_bait_id:
-                user.current_bait_id = random_bait_id
+                bait_template = self.item_template_repo.get_bait_by_id(random_bait_id)
+                if bait_template:
+                    user.current_bait_id = random_bait_id
+                    user.bait_start_time = get_now()
 
-        if user.current_bait_id is not None:
-            bait_template = self.item_template_repo.get_bait_by_id(user.current_bait_id)
-            # logger.info(f"鱼饵信息: {bait_template}")
-            if bait_template:
-                quantity_modifier *= bait_template.quantity_modifier
-                rare_chance += bait_template.rare_chance_modifier
-                base_success_rate += bait_template.success_rate_modifier
-                garbage_reduction_modifier = bait_template.garbage_reduction_modifier
-                coins_chance += bait_template.value_modifier
+        if bait_template:
+            # 一次性鱼饵从首次使用起扣除；免消耗拟饵始终保留。
+            if bait_template.is_consumable and bait_template.duration_minutes <= 0:
+                self.inventory_repo.update_bait_quantity(user_id, bait_template.bait_id, -1)
+            quantity_modifier *= bait_template.quantity_modifier
+            rare_chance += bait_template.rare_chance_modifier
+            base_success_rate += bait_template.success_rate_modifier
+            garbage_reduction_modifier = bait_template.garbage_reduction_modifier
+            coins_chance += bait_template.value_modifier
         logger.debug(f"使用鱼饵加成后： base_success_rate={base_success_rate}, quality_modifier={quality_modifier}, quantity_modifier={quantity_modifier}, rare_chance={rare_chance}, coins_chance={coins_chance}")
         # 3. 判断是否成功钓到
         if random.random() >= base_success_rate:
@@ -355,12 +341,18 @@ class FishingService:
             if fractional > 0 and random.random() < fractional:
                 total_catches += 1
 
+        # 多鱼加成仍受区域剩余稀有鱼配额约束，按条数结算。
+        if fish_template.rarity >= 4:
+            total_catches = min(total_catches, max(0, zone.daily_rare_fish_quota - zone.rare_fish_caught_today))
+
         # 5. 处理鱼塘容量（在确定总渔获量后）
+        # 单次渔获本身可能超过容量，超出的新鱼也须放生。
+        stored_catches = min(total_catches, max(0, user.fish_pond_capacity))
         user_fish_inventory = self.inventory_repo.get_fish_inventory(user.user_id)
         current_fish_count = sum(item.quantity for item in user_fish_inventory)
         
         # 计算放入新鱼后是否会溢出，以及溢出多少
-        overflow_amount = (current_fish_count + total_catches) - user.fish_pond_capacity
+        overflow_amount = (current_fish_count + stored_catches) - user.fish_pond_capacity
 
         if overflow_amount > 0:
             # 鱼塘空间不足，需要移除 `overflow_amount` 条鱼
@@ -376,18 +368,20 @@ class FishingService:
                 self.inventory_repo.update_fish_quantity(
                     user.user_id,
                     random_fish_stack.fish_id,
-                    -1
+                    -1,
+                    quality_level=random_fish_stack.quality_level,
                 )
 
         if fish_template.rarity >= 4:
             # 如果是4星及以上稀有鱼，增加用户的稀有鱼捕获计数
             zone = self.inventory_repo.get_zone_by_id(user.fishing_zone_id)
             if zone:
-                zone.rare_fish_caught_today += 1
+                zone.rare_fish_caught_today += total_catches
                 self.inventory_repo.update_fishing_zone(zone)
 
         # 6. 更新数据库
-        self.inventory_repo.add_fish_to_inventory(user.user_id, fish_template.fish_id, quantity=total_catches, quality_level=quality_level)
+        if stored_catches:
+            self.inventory_repo.add_fish_to_inventory(user.user_id, fish_template.fish_id, quantity=stored_catches, quality_level=quality_level)
 
         # 更新用户统计数据
         user.total_fishing_count += total_catches
@@ -455,6 +449,8 @@ class FishingService:
             "success": True,
             "fish": {
                 "name": fish_template.name,
+                "quantity": total_catches,
+                "stored_quantity": stored_catches,
                 "rarity": fish_template.rarity,
                 "weight": weight,
                 "value": value * 2 if quality_level == 1 else value,  # 高品质鱼双倍价值
@@ -925,42 +921,18 @@ class FishingService:
     def _reset_rare_fish_daily_quota(self) -> bool:
         """
         检查并重置所有区域的稀有鱼每日配额计数。
-        
-        使用快速路径检查模式优化性能：
-        1. 快速路径：无锁检查时间，如果不需要重置直接返回（99.9%的情况）
-        2. 慢速路径：加锁后再次确认（double-check），避免并发问题
+
+        刷新时间与计数同事务持久化，重启可补做刷新，事务回滚后可重试。
         
         Returns:
             bool: 如果执行了重置返回 True，否则返回 False
         """
-        # 快速路径：无锁检查，避免大多数情况下的锁竞争
-        current_reset_time = get_last_reset_time(self.daily_reset_hour)
-        if current_reset_time == self.last_reset_time:
-            # 不需要重置，直接返回（99.9%的情况）
-            return False
-        
-        # 慢速路径：可能需要重置，获取锁后再次确认（double-check pattern）
         with self.rare_fish_reset_lock:
-            # 再次检查，防止在获取锁的过程中其他线程已经执行了重置
             current_reset_time = get_last_reset_time(self.daily_reset_hour)
-            if current_reset_time != self.last_reset_time:
-                # 如果刷新时间点变了，执行每日重置任务
-                logger.info(f"检测到刷新时间点变更（每日{self.daily_reset_hour}点刷新），从 {self.last_reset_time} 到 {current_reset_time}，开始执行稀有鱼配额重置...")
-                self.last_reset_time = current_reset_time
-                
-                # 重置所有受配额限制区域的稀有鱼计数（4星及以上）
-                all_zones = self.inventory_repo.get_all_zones()
-                reset_count = 0
-                for zone in all_zones:
-                    if zone.daily_rare_fish_quota > 0:  # 只重置有配额的区域
-                        zone.rare_fish_caught_today = 0
-                        self.inventory_repo.update_fishing_zone(zone)
-                        reset_count += 1
-                
-                logger.info(f"稀有鱼配额重置完成，共重置 {reset_count} 个区域的计数")
-                return True
-        
-        return False
+            reset = self.inventory_repo.reset_rare_fish_daily_quota(current_reset_time)
+            if reset:
+                logger.info("稀有鱼配额重置完成，刷新时间点：%s", current_reset_time)
+            return reset
 
     def start_auto_fishing_task(self):
         """启动自动钓鱼的后台线程。"""

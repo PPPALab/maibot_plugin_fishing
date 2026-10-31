@@ -1,4 +1,10 @@
-pyyaml>=6.0
-quart
-requests
-numpy>=1.21.0
+maibot-plugin-sdk==2.20.0
+Pillow>=10.4,<14
+PyYAML>=6,<7
+quart>=0.20,<0.23
+hypercorn>=0.17,<0.19
+requests>=2.32,<3
+numpy>=1.26,<3
+aiohttp>=3.10,<4
+fonttools>=4.55,<5
+tomlkit>=0.13,<1

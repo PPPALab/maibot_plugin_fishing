@@ -1,69 +1,18 @@
 # 贡献指南
 
-感谢您对 AstrBot 钓鱼插件的关注和贡献！
+感谢参与MaiBot原生钓鱼插件的开发。本仓库是独立移植版，不是AstrBot运行时插件。
+来源与作者信息见[第三方声明](THIRD_PARTY_NOTICES.md)。
 
-## 如何贡献
+## 报告问题
 
-### 提交 Pull Request
+在本仓库创建Issue，包含：
 
-1. **Fork** 本仓库
-2. 创建您的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开一个 **Pull Request**
+- 插件版本、MaiBot版本、SDK/Python版本、是否Docker部署。
+- 可重复的操作步骤、预期行为与实际行为。
+- 脱敏后的相关日志，必要时提供截图。
+- 后台连接问题请注明监听地址、Docker端口映射和所用Host白名单，但不要上传密钥。
 
-### ⚠️ 重要：Pull Request 目标分支
+不要上传完整`config.toml`、数据库、QQ个人信息、访问Token或配置备份。
+安全问题不要在公开Issue贴出有效凭据。
 
-**请将您的 Pull Request 提交到 `develop` 分支，而不是 `main` 分支。**
-
-- ✅ **正确**：PR 目标分支 → `develop`
-- ❌ **错误**：PR 目标分支 → `main`
-
-`main` 分支用于稳定版本发布，所有新功能和改进都应该先合并到 `develop` 分支进行测试。
-
-### 代码规范
-
-- 遵循 Python PEP 8 代码规范
-- 添加适当的注释和文档字符串
-- 确保代码通过所有测试
-- 提交信息使用清晰的中文描述
-
-### 提交信息格式
-
-建议使用以下格式：
-
-```
-类型: 简短描述
-
-详细描述（可选）
-```
-
-类型包括：
-- `feat`: 新功能
-- `fix`: Bug修复
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建/工具相关
-
-### 报告问题
-
-在提交 Issue 之前，请先搜索是否已有类似问题。提交 Issue 时请包含：
-- 问题描述
-- 复现步骤
-- 预期行为
-- 实际行为
-- 环境信息（Python版本、AstrBot版本等）
-
-### 功能建议
-
-欢迎在 [Issues](https://github.com/xxlemon-io/astrbot_plugin_fishing/issues) 中提出新功能想法和改进建议。请详细描述：
-- 功能需求
-- 使用场景
-- 预期效果
-
----
-
-再次感谢您的贡献！🎣
-
+贡献的代码和修改随项目采用AGPL-3.0-only；新增资源需说明作者、来源和可兼容的许可证。

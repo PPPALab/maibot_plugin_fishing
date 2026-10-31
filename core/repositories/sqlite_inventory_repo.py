@@ -4,7 +4,9 @@ from typing import Optional, List, Dict, Any, Set
 from datetime import datetime
 import json
 
-from astrbot.api import logger
+import logging
+
+logger = logging.getLogger(__name__)
 # 导入抽象基类和领域模型
 from .abstract_repository import AbstractInventoryRepository
 from ..domain.models import UserFishInventoryItem, UserAquariumItem, UserRodInstance, UserAccessoryInstance, FishingZone, AquariumUpgrade
@@ -23,9 +25,28 @@ class SqliteInventoryRepository(AbstractInventoryRepository):
         self.db_path = db_path
         self._connection_manager = DatabaseConnectionManager(db_path)
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """获取一个线程安全的数据库连接。"""
-        return self._connection_manager.get_connection()
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
+
+    def reset_rare_fish_daily_quota(self, reset_time: datetime) -> bool:
+        """配额及刷新标记共用外层事务，失败回滚时不会丢失重试机会。"""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT reset_time FROM fishing_quota_reset WHERE id = 1"
+            ).fetchone()
+            stamp = reset_time.isoformat()
+            if row and row['reset_time'] == stamp:
+                return False
+            # 旧数据库无可靠刷新时间，首次升级后补做一次刷新。
+            conn.execute(
+                "UPDATE fishing_zones SET rare_fish_caught_today = 0 WHERE daily_rare_fish_quota > 0"
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO fishing_quota_reset (id, reset_time) VALUES (1, ?)",
+                (stamp,),
+            )
+            return True
 
     # --- 私有映射辅助方法 ---
     def _row_to_fish_item(self, row: sqlite3.Row) -> Optional[UserFishInventoryItem]:
@@ -107,6 +128,8 @@ class SqliteInventoryRepository(AbstractInventoryRepository):
             return result[0] if result and result[0] is not None else 0
 
     def add_fish_to_inventory(self, user_id: str, fish_id: int, quantity: int = 1, quality_level: int = 0) -> None:
+        if type(quantity) is not int or quantity <= 0:
+            raise ValueError("新增鱼数量必须是正整数")
         with self._connection_manager.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -348,6 +371,13 @@ class SqliteInventoryRepository(AbstractInventoryRepository):
         """更新用户道具库存中特定道具的数量（可增可减），并确保数量不小于0。"""
         with self._connection_manager.get_connection() as conn:
             cursor = conn.cursor()
+            if delta < 0:
+                cursor.execute('UPDATE user_items SET quantity=quantity+? WHERE user_id=? AND item_id=? AND quantity>=?',
+                               (delta, user_id, item_id, -delta))
+                if cursor.rowcount != 1:
+                    raise ValueError('道具库存不足，拒绝隐式截断扣除')
+                cursor.execute('DELETE FROM user_items WHERE user_id=? AND item_id=? AND quantity=0', (user_id, item_id))
+                return
             cursor.execute(
                 """
                 INSERT INTO user_items (user_id, item_id, quantity)
@@ -420,6 +450,13 @@ class SqliteInventoryRepository(AbstractInventoryRepository):
         """更新用户鱼类库存中特定鱼的数量（可增可减），并确保数量不小于0。"""
         with self._connection_manager.get_connection() as conn:
             cursor = conn.cursor()
+            if delta < 0:
+                cursor.execute('UPDATE user_fish_inventory SET quantity=quantity+? WHERE user_id=? AND fish_id=? AND quality_level=? AND quantity>=?',
+                               (delta, user_id, fish_id, quality_level, -delta))
+                if cursor.rowcount != 1:
+                    raise ValueError('指定品质鱼库存不足，拒绝隐式截断扣除')
+                cursor.execute('DELETE FROM user_fish_inventory WHERE user_id=? AND fish_id=? AND quality_level=? AND quantity=0', (user_id, fish_id, quality_level))
+                return
             cursor.execute("""
                 INSERT INTO user_fish_inventory (user_id, fish_id, quality_level, quantity)
                 VALUES (?, ?, ?, MAX(0, ?))

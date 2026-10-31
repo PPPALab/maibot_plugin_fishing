@@ -13,14 +13,9 @@ class SqliteItemTemplateRepository(AbstractItemTemplateRepository):
         self.db_path = db_path
         self._local = threading.local()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """获取一个线程安全的数据库连接。"""
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            self._local.connection = conn
-        return conn
+    def _get_connection(self):
+        from ..database.unit_of_work import connection
+        return connection(self.db_path)
 
     # --- 私有映射辅助方法 ---
     def _row_to_fish(self, row: sqlite3.Row) -> Optional[Fish]:
@@ -354,7 +349,7 @@ class SqliteItemTemplateRepository(AbstractItemTemplateRepository):
                 "garbage_reduction_modifier": data.get("garbage_reduction_modifier", 0.0),
                 "value_modifier": data.get("value_modifier", 1.0),
                 "quantity_modifier": data.get("quantity_modifier", 1.0),
-                "is_consumable": 1 if "is_consumable" in data else 0
+                "is_consumable": 1 if data.get("is_consumable") in (True, 1, "1", "on") else 0
             }
             cursor.execute("""
                 INSERT INTO baits (
@@ -387,7 +382,7 @@ class SqliteItemTemplateRepository(AbstractItemTemplateRepository):
                 "garbage_reduction_modifier": data.get("garbage_reduction_modifier", 0.0),
                 "value_modifier": data.get("value_modifier", 1.0),
                 "quantity_modifier": data.get("quantity_modifier", 1.0),
-                "is_consumable": 1 if "is_consumable" in data else 0
+                "is_consumable": 1 if data.get("is_consumable") in (True, 1, "1", "on") else 0
             }
             cursor.execute("""
                 UPDATE baits SET

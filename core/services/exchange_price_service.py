@@ -4,8 +4,9 @@ import time
 from datetime import datetime, timedelta, time as dt_time
 from typing import Dict, List, Any, Optional
 
-from astrbot.api import logger
+import logging
 
+logger = logging.getLogger(__name__)
 from ..domain.models import Exchange
 from ..repositories.abstract_repository import AbstractExchangeRepository
 

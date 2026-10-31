@@ -11,9 +11,8 @@ from dataclasses import dataclass, field
 
 from ..utils import get_now
 from ..repositories.abstract_repository import AbstractUserRepository, AbstractLogRepository
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 @dataclass
 class SicboBet:
     """骰宝下注记录"""
@@ -152,6 +151,8 @@ class SicboService:
                     "success": False,
                     "message": f"❌ 当前会话已有游戏进行中，剩余时间 {int(remaining_time)} 秒"
                 }
+            # 到期不等于已结算；命令可能先于后台结算取得锁，不能覆盖已扣款的下注。
+            return {"success": False, "message": "❌ 当前游戏正在开奖中，请等待结算完成后再开庄"}
         
         # 创建新游戏
         now = get_now()
@@ -178,7 +179,8 @@ class SicboService:
             old_task.cancel()
         
         # 启动新的倒计时任务
-        self.countdown_tasks[session_id] = asyncio.create_task(self._countdown_task(session_id))
+        # Native lifecycle scheduler owns deadlines and durable recovery. Do not inherit
+        # an open command transaction into a detached asyncio task.
         
         logger.info(f"开启骰宝游戏: {game_id}, 会话: {session_id}, 倒计时 {self.countdown_seconds} 秒")
         

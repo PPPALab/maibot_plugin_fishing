@@ -1,7 +1,7 @@
 
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 # --- 配置区 ---
 
 # 定义本次迁移需要新增的称号数据

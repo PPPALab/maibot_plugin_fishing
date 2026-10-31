@@ -1,8 +1,8 @@
 # 迁移脚本 033: 为 users 表添加永久的擦弹统计字段
 
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     应用此迁移：为 users 表添加 max_wipe_bomb_multiplier 和 min_wipe_bomb_multiplier 字段。

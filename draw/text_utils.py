@@ -3,7 +3,9 @@
 优化文本测量、换行和渲染性能
 """
 import os
+import math
 import platform
+from functools import lru_cache
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Tuple, Optional
 
@@ -202,15 +204,33 @@ def _find_cjk_font() -> Optional[str]:
     return None
 
 
-class FontWithFallback:
+@lru_cache(maxsize=8)
+def _font_codepoints(path):
+    from fontTools.ttLib import TTFont
+    try:
+        with TTFont(path, lazy=True) as font:
+            return frozenset(font.getBestCmap())
+    except Exception:
+        return frozenset()
+
+
+class FontWithFallback(ImageFont.FreeTypeFont):
     """
     带自动回退的字体包装类
-    当主字体不支持某个字符时，自动使用系统CJK字体
+    当主字体不支持某个字符时，自动使用CJK字体；emoji回退到Noto Emoji
     """
-    def __init__(self, primary_font: ImageFont.FreeTypeFont, fallback_font: Optional[ImageFont.FreeTypeFont] = None):
+    def __init__(self, primary_font: ImageFont.FreeTypeFont, fallback_font: Optional[ImageFont.FreeTypeFont] = None,
+                 emoji_font: Optional[ImageFont.FreeTypeFont] = None):
         self.primary_font = primary_font
         self.fallback_font = fallback_font
+        self.emoji_font = emoji_font
         self._char_cache = {}  # 缓存字符到字体的映射
+        self.codepoints = _font_codepoints(getattr(primary_font, 'path', ''))
+        # cmap 必须挂在字体对象自身，供 _font_covering_all 按字体查询
+        primary_font.codepoints = self.codepoints
+        for font in (fallback_font, emoji_font):
+            if font is not None:
+                font.codepoints = _font_codepoints(getattr(font, 'path', ''))
     
     def _is_cjk_char(self, char: str) -> bool:
         """判断是否为CJK字符（中文、日文、韩文）"""
@@ -236,12 +256,25 @@ class FontWithFallback:
         选择字符的渲染字体
         
         策略：
-        1. mask 为空 → 回退字体
-        2. CJK 字符且 bbox 无效 → 回退字体
-        3. 其他 → 主字体
+        1. 主字体 cmap 覆盖 → 主字体
+        2. CJK 回退字体覆盖 → CJK 回退
+        3. emoji（含VS16/ZWJ零宽符）→ Noto Emoji
+        4. mask 异常兜底 → CJK 回退或主字体
         """
         if char in self._char_cache:
             return self._char_cache[char]
+        # Missing glyphs often render a non-empty tofu box; mask/bbox alone cannot
+        # detect them. Use the actual cmap, retaining upstream font where supported.
+        code = ord(char) if char else 0
+        if not (self.codepoints and code in self.codepoints):
+            if self.fallback_font and getattr(self.fallback_font, 'codepoints', None) \
+                    and code in self.fallback_font.codepoints:
+                self._char_cache[char] = self.fallback_font
+                return self.fallback_font
+            if self.emoji_font and getattr(self.emoji_font, 'codepoints', None) \
+                    and code in self.emoji_font.codepoints:
+                self._char_cache[char] = self.emoji_font
+                return self.emoji_font
         
         try:
             mask = self.primary_font.getmask(char)
@@ -270,24 +303,92 @@ class FontWithFallback:
             self._char_cache[char] = font
             return font
     
+    def _fonts(self):
+        for font in (self.primary_font, self.fallback_font, self.emoji_font):
+            if font is not None:
+                yield font
+
+    def _font_covering_all(self, text):
+        for font in self._fonts():
+            cps = getattr(font, 'codepoints', None)
+            if cps and all(ord(c) in cps for c in text):
+                return font
+        return None
+
+    def _font_for_text(self, text):
+        return self._font_covering_all(text)
+
+    def _iter_char_fonts(self, text):
+        for char in text:
+            yield char, self._get_font_for_char(char)
+
+    def _runs(self, text):
+        """Keep adjacent glyphs together for kerning and emoji selectors."""
+        runs = []
+        for char, font in self._iter_char_fonts(text):
+            if runs and runs[-1][1] is font:
+                runs[-1] = (runs[-1][0] + char, font)
+            else:
+                runs.append((char, font))
+        return runs
+
+    def _mixed_layout(self, text, mode='', direction=None, features=None,
+                      language=None, stroke_width=0, anchor=None):
+        anchor = anchor or 'la'
+        if direction not in (None, 'ltr') or len(anchor) != 2 or anchor[0] not in 'lmr' or anchor[1] not in 'atmsbd':
+            raise ValueError('Mixed fallback supports horizontal ltr text anchors only')
+        runs, cursor, bounds = [], 0.0, None
+        for part, font in self._runs(text):
+            box = font.getbbox(part, mode, direction, features, language, stroke_width, 'ls')
+            box = (cursor + box[0], box[1], cursor + box[2], box[3])
+            if box[3] > box[1]:
+                bounds = box if bounds is None else (min(bounds[0], box[0]), min(bounds[1], box[1]),
+                                                     max(bounds[2], box[2]), max(bounds[3], box[3]))
+            runs.append((cursor, part, font))
+            cursor += font.getlength(part, mode, direction, features, language)
+        bounds = bounds or (0, 0, 0, 0)
+        dx = {'l': 0, 'm': -round(cursor / 2), 'r': -round(cursor)}[anchor[0]]
+        ascent, descent = self.primary_font.getmetrics()
+        dy = {'a': ascent, 't': -bounds[1], 'm': (ascent - descent) // 2,
+              's': 0, 'b': -bounds[3], 'd': -descent}[anchor[1]]
+        box = (math.floor(bounds[0] + dx), math.floor(bounds[1] + dy),
+               math.ceil(bounds[2] + dx), math.ceil(bounds[3] + dy))
+        return runs, box, dx, dy
+
     def getmask(self, text, mode="", *args, **kwargs):
         """获取文本的mask，自动处理回退"""
-        if not self.fallback_font or len(text) == 1:
-            return self.primary_font.getmask(text, mode, *args, **kwargs)
-        
-        # 对于多字符文本，需要逐个字符处理
-        # 这里简化处理：如果回退字体存在，尝试使用它
-        try:
-            return self.primary_font.getmask(text, mode, *args, **kwargs)
-        except Exception:
-            if self.fallback_font:
-                return self.fallback_font.getmask(text, mode, *args, **kwargs)
-            raise
+        font = self._font_for_text(text)
+        if font is not None:
+            return font.getmask(text, mode, *args, **kwargs)
+        return self.getmask2(text, mode, *args, **kwargs)[0]
     
     def getbbox(self, text, *args, **kwargs):
         """获取文本边界框"""
-        return self.primary_font.getbbox(text, *args, **kwargs)
-    
+        font = self._font_for_text(text)
+        if font is not None:
+            return font.getbbox(text, *args, **kwargs)
+        return self._mixed_layout(text, *args, **kwargs)[1]
+
+    def getlength(self, text, *args, **kwargs):
+        font = self._font_for_text(text)
+        if font is not None:
+            return font.getlength(text, *args, **kwargs)
+        return sum(font.getlength(part, *args, **kwargs) for part, font in self._runs(text))
+
+    def getmask2(self, text, mode='', direction=None, features=None, language=None,
+                 stroke_width=0, anchor=None, ink=0, start=None, **kwargs):
+        font = self._font_for_text(text)
+        if font is not None:
+            return font.getmask2(text, mode, direction, features, language, stroke_width,
+                                 anchor, ink, start=start, **kwargs)
+        runs, box, dx, dy = self._mixed_layout(text, mode, direction, features, language, stroke_width, anchor)
+        canvas = Image.new('L', (max(0, box[2] - box[0]), max(0, box[3] - box[1])))
+        draw = ImageDraw.Draw(canvas)
+        for x, part, font in runs:
+            draw.text((x + dx - box[0], dy - box[1]), part, font=font, fill=255, anchor='ls',
+                      direction=direction, features=features, language=language, stroke_width=stroke_width)
+        return canvas.im, box[:2]
+
     def __getattr__(self, name):
         """代理其他属性到主字体"""
         return getattr(self.primary_font, name)
@@ -320,7 +421,24 @@ def load_font_with_cjk_fallback(font_path: str, size: int) -> FontWithFallback:
             # 如果加载失败，记录错误但不抛出异常
             pass
     
-    return FontWithFallback(primary_font, fallback_font)
+    return FontWithFallback(primary_font, fallback_font, _load_emoji_font(size))
+
+
+EMOJI_FONT_PATH = os.path.join(os.path.dirname(__file__), "resource", "NotoEmoji-Regular.ttf")
+
+
+@lru_cache(maxsize=16)
+def _load_emoji_font(size: int) -> Optional[ImageFont.FreeTypeFont]:
+    """加载等宽单色 Noto Emoji（OFL），用于主/CJK字体均缺失的字形。"""
+    try:
+        font = ImageFont.truetype(EMOJI_FONT_PATH, size)
+        try:
+            font.set_variation_by_axes([400])
+        except Exception:
+            pass
+        return font
+    except Exception:
+        return None
 
 
 def draw_text_smart(
@@ -343,79 +461,5 @@ def draw_text_smart(
         font: 字体对象（可以是FontWithFallback或普通字体）
         fill: 文本颜色
     """
-    # 如果是FontWithFallback类型，需要特殊处理
-    if isinstance(font, FontWithFallback):
-        if not font.fallback_font:
-            # 没有回退字体，直接绘制
-            draw.text(position, text, font=font.primary_font, fill=fill)
-            return
-        
-        # 检查是否所有字符都能用主字体渲染
-        need_fallback = False
-        for char in text:
-            char_font = font._get_font_for_char(char)
-            if char_font != font.primary_font:
-                need_fallback = True
-                break
-        
-        # 如果所有字符都能用主字体，直接一次性绘制（保持原始间距）
-        if not need_fallback:
-            draw.text(position, text, font=font.primary_font, fill=fill)
-            return
-        
-        # 需要回退字体，逐个字符检查并绘制
-        x, y = position
-        current_x = x
-        
-        # 创建临时图像用于测量（复用以提高效率）
-        temp_img = Image.new('RGB', (200, 100), (255, 255, 255))
-        temp_draw = ImageDraw.Draw(temp_img)
-        
-        # 计算中线对齐：使用主字体的标准字符的垂直中心作为参考
-        # 这确保无论使用哪个字体渲染，字符都在同一水平视觉中心线上
-        # 使用"A"作为参考字符（标准拉丁字母大写，所有字体都支持）
-        reference_bbox = temp_draw.textbbox((0, 0), "A", font=font.primary_font)
-        reference_center_y = (reference_bbox[1] + reference_bbox[3]) / 2  # 垂直中心
-        
-        for i, char in enumerate(text):
-            # 获取适合该字符的字体
-            char_font = font._get_font_for_char(char)
-            
-            # 获取当前字符的bbox
-            char_bbox = temp_draw.textbbox((0, 0), char, font=char_font)
-            char_center_y = (char_bbox[1] + char_bbox[3]) / 2  # 当前字符的垂直中心
-            
-            # 计算y坐标：让所有字符的垂直中心对齐到参考中心
-            # 基本思路：字符中心 = y + reference_center_y
-            # 所以：char_y = y + (reference_center_y - char_center_y)
-            char_y = y + (reference_center_y - char_center_y)
-            
-            # 测量字符宽度
-            # 为了保持字符间距一致，统一使用主字体来测量宽度
-            try:
-                # 使用主字体测量宽度（保持一致的间距）
-                if hasattr(font.primary_font, 'getlength'):
-                    char_width = int(font.primary_font.getlength(char))
-                else:
-                    bbox = temp_draw.textbbox((0, 0), char, font=font.primary_font)
-                    char_width = bbox[2] - bbox[0]
-                    
-                    # 如果主字体无法测量（宽度为0），使用实际字符字体测量
-                    if char_width <= 0:
-                        if hasattr(char_font, 'getlength'):
-                            char_width = int(char_font.getlength(char))
-                        else:
-                            bbox = temp_draw.textbbox((0, 0), char, font=char_font)
-                            char_width = bbox[2] - bbox[0]
-                            if char_width <= 0:
-                                char_width = font.primary_font.size
-            except Exception:
-                # 如果测量失败，使用字体大小估算
-                char_width = font.primary_font.size
-            
-            # 绘制字符（使用调整后的y坐标，确保基线对齐）
-            draw.text((current_x, char_y), char, font=char_font, fill=fill)
-            current_x += char_width
-    else:
-        # 普通字体，直接绘制
-        draw.text(position, text, font=font, fill=fill)
+    # One layout path for measurement and drawing (including fallback advances).
+    draw.text(position, text, font=font, fill=fill)

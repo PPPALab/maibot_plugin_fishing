@@ -3,8 +3,9 @@
 处理所有骰宝相关的命令
 """
 
-from astrbot.api.event import AstrMessageEvent
-from astrbot.api import logger
+from ..events import GameEvent
+import logging
+logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING
 from ..draw.sicbo import (
     draw_sicbo_game_start, draw_sicbo_bet_confirmation, draw_sicbo_bet_merged, draw_sicbo_status,
@@ -14,10 +15,10 @@ from ..draw.sicbo import (
 from ..utils import parse_amount
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-def _get_game_session_id(event: AstrMessageEvent) -> str:
+def _get_game_session_id(event: GameEvent) -> str:
     """
     获取骰宝游戏的会话ID
     在群聊中使用群ID确保所有群成员共享同一个游戏
@@ -33,7 +34,7 @@ def _get_game_session_id(event: AstrMessageEvent) -> str:
         return event.unified_msg_origin
 
 
-async def start_sicbo_game(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def start_sicbo_game(plugin: "FishingPlugin", event: GameEvent):
     """开庄命令"""
     try:
         # 获取游戏会话ID
@@ -59,7 +60,7 @@ async def start_sicbo_game(plugin: "FishingPlugin", event: AstrMessageEvent):
                 # 图片模式：生成开庄成功图片
                 countdown_seconds = plugin.sicbo_service.get_countdown_seconds()
                 image = draw_sicbo_game_start(countdown_seconds)
-                image_path = save_image_to_temp(image, "sicbo_start", plugin.data_dir)
+                image_path = save_image_to_temp(image, "sicbo_start", plugin.runtime_dir)
                 yield event.image_result(image_path)
             else:
                 # 文本模式：发送文本消息
@@ -71,7 +72,7 @@ async def start_sicbo_game(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 开庄失败：{str(e)}")
 
 
-async def place_bet(plugin: "FishingPlugin", event: AstrMessageEvent, bet_type: str):
+async def place_bet(plugin: "FishingPlugin", event: GameEvent, bet_type: str):
     """下注命令的通用处理函数"""
     # 获取游戏会话ID
     game_session_id = _get_game_session_id(event)
@@ -111,11 +112,11 @@ async def place_bet(plugin: "FishingPlugin", event: AstrMessageEvent, bet_type: 
                         result.get("new_total", 0), 
                         username
                     )
-                    image_path = save_image_to_temp(image, "sicbo_bet_merged", plugin.data_dir)
+                    image_path = save_image_to_temp(image, "sicbo_bet_merged", plugin.runtime_dir)
                 else:
                     # 普通下注的图片
                     image = draw_sicbo_bet_confirmation(bet_type, amount, username)
-                    image_path = save_image_to_temp(image, "sicbo_bet", plugin.data_dir)
+                    image_path = save_image_to_temp(image, "sicbo_bet", plugin.runtime_dir)
                 
                 yield event.image_result(image_path)
             else:
@@ -128,163 +129,163 @@ async def place_bet(plugin: "FishingPlugin", event: AstrMessageEvent, bet_type: 
         yield event.plain_result(f"❌ 下注失败：{str(e)}")
 
 
-async def bet_big(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_big(plugin: "FishingPlugin", event: GameEvent):
     """鸭大"""
     async for result in place_bet(plugin, event, "大"):
         yield result
 
 
-async def bet_small(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_small(plugin: "FishingPlugin", event: GameEvent):
     """鸭小"""
     async for result in place_bet(plugin, event, "小"):
         yield result
 
 
-async def bet_odd(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_odd(plugin: "FishingPlugin", event: GameEvent):
     """鸭单"""
     async for result in place_bet(plugin, event, "单"):
         yield result
 
 
-async def bet_even(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_even(plugin: "FishingPlugin", event: GameEvent):
     """鸭双"""
     async for result in place_bet(plugin, event, "双"):
         yield result
 
 
-async def bet_triple(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_triple(plugin: "FishingPlugin", event: GameEvent):
     """鸭豹子"""
     async for result in place_bet(plugin, event, "豹子"):
         yield result
 
 
-async def bet_one_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_one_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭一点"""
     async for result in place_bet(plugin, event, "一点"):
         yield result
 
 
-async def bet_two_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_two_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭二点"""
     async for result in place_bet(plugin, event, "二点"):
         yield result
 
 
-async def bet_three_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_three_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭三点"""
     async for result in place_bet(plugin, event, "三点"):
         yield result
 
 
-async def bet_four_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_four_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭四点"""
     async for result in place_bet(plugin, event, "四点"):
         yield result
 
 
-async def bet_five_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_five_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭五点"""
     async for result in place_bet(plugin, event, "五点"):
         yield result
 
 
-async def bet_six_point(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_six_point(plugin: "FishingPlugin", event: GameEvent):
     """鸭六点"""
     async for result in place_bet(plugin, event, "六点"):
         yield result
 
 
-async def bet_total_points(plugin: "FishingPlugin", event: AstrMessageEvent, points: str):
+async def bet_total_points(plugin: "FishingPlugin", event: GameEvent, points: str):
     """鸭总点数的通用函数"""
     async for result in place_bet(plugin, event, f"{points}点"):
         yield result
 
 
-async def bet_4_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_4_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭4点"""
     async for result in bet_total_points(plugin, event, "4"):
         yield result
 
 
-async def bet_5_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_5_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭5点"""
     async for result in bet_total_points(plugin, event, "5"):
         yield result
 
 
-async def bet_6_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_6_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭6点"""
     async for result in bet_total_points(plugin, event, "6"):
         yield result
 
 
-async def bet_7_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_7_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭7点"""
     async for result in bet_total_points(plugin, event, "7"):
         yield result
 
 
-async def bet_8_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_8_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭8点"""
     async for result in bet_total_points(plugin, event, "8"):
         yield result
 
 
-async def bet_9_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_9_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭9点"""
     async for result in bet_total_points(plugin, event, "9"):
         yield result
 
 
-async def bet_10_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_10_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭10点"""
     async for result in bet_total_points(plugin, event, "10"):
         yield result
 
 
-async def bet_11_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_11_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭11点"""
     async for result in bet_total_points(plugin, event, "11"):
         yield result
 
 
-async def bet_12_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_12_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭12点"""
     async for result in bet_total_points(plugin, event, "12"):
         yield result
 
 
-async def bet_13_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_13_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭13点"""
     async for result in bet_total_points(plugin, event, "13"):
         yield result
 
 
-async def bet_14_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_14_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭14点"""
     async for result in bet_total_points(plugin, event, "14"):
         yield result
 
 
-async def bet_15_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_15_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭15点"""
     async for result in bet_total_points(plugin, event, "15"):
         yield result
 
 
-async def bet_16_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_16_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭16点"""
     async for result in bet_total_points(plugin, event, "16"):
         yield result
 
 
-async def bet_17_points(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def bet_17_points(plugin: "FishingPlugin", event: GameEvent):
     """鸭17点"""
     async for result in bet_total_points(plugin, event, "17"):
         yield result
 
 
-async def sicbo_status(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sicbo_status(plugin: "FishingPlugin", event: GameEvent):
     """查看骰宝游戏状态"""
     try:
         game_session_id = _get_game_session_id(event)
@@ -295,7 +296,7 @@ async def sicbo_status(plugin: "FishingPlugin", event: AstrMessageEvent):
                 # 图片模式：生成状态图片
                 game_data = result.get("game_data", {})
                 image = draw_sicbo_status(game_data)
-                image_path = save_image_to_temp(image, "sicbo_status", plugin.data_dir)
+                image_path = save_image_to_temp(image, "sicbo_status", plugin.runtime_dir)
                 yield event.image_result(image_path)
             else:
                 # 文本模式：生成文本状态消息
@@ -329,7 +330,7 @@ async def sicbo_status(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 查看状态失败：{str(e)}")
 
 
-async def my_bets(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def my_bets(plugin: "FishingPlugin", event: GameEvent):
     """查看我的下注"""
     game_session_id = _get_game_session_id(event)
     user_id = plugin._get_effective_user_id(event)
@@ -344,7 +345,7 @@ async def my_bets(plugin: "FishingPlugin", event: AstrMessageEvent):
                 # 图片模式：生成用户下注图片
                 user_bets = result.get("bets", [])
                 image = draw_sicbo_user_bets(user_bets, username)
-                image_path = save_image_to_temp(image, "sicbo_user_bets", plugin.data_dir)
+                image_path = save_image_to_temp(image, "sicbo_user_bets", plugin.runtime_dir)
                 yield event.image_result(image_path)
             else:
                 # 文本模式：生成文本下注消息
@@ -369,14 +370,14 @@ async def my_bets(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 查看下注失败：{str(e)}")
 
 
-async def sicbo_help(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sicbo_help(plugin: "FishingPlugin", event: GameEvent):
     """骰宝游戏帮助"""
     try:
         if plugin.sicbo_service.is_image_mode():
             # 图片模式：生成帮助图片
             countdown_seconds = plugin.sicbo_service.get_countdown_seconds()
             image = draw_sicbo_help(countdown_seconds)
-            image_path = save_image_to_temp(image, "sicbo_help", plugin.data_dir)
+            image_path = save_image_to_temp(image, "sicbo_help", plugin.runtime_dir)
             yield event.image_result(image_path)
         else:
             # 文本模式：发送简化的帮助文本
@@ -409,13 +410,13 @@ async def sicbo_help(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 获取帮助失败：{str(e)}")
 
 
-async def sicbo_odds(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sicbo_odds(plugin: "FishingPlugin", event: GameEvent):
     """骰宝赔率详情"""
     try:
         if plugin.sicbo_service.is_image_mode():
             # 图片模式：生成赔率图片
             image = draw_sicbo_odds()
-            image_path = save_image_to_temp(image, "sicbo_odds", plugin.data_dir)
+            image_path = save_image_to_temp(image, "sicbo_odds", plugin.runtime_dir)
             yield event.image_result(image_path)
         else:
             # 文本模式：发送详细赔率文本
@@ -445,7 +446,7 @@ async def sicbo_odds(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 获取赔率失败：{str(e)}")
 
 
-async def force_settle_sicbo(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def force_settle_sicbo(plugin: "FishingPlugin", event: GameEvent):
     """管理员强制结算骰宝游戏"""
     try:
         game_session_id = _get_game_session_id(event)
@@ -455,7 +456,7 @@ async def force_settle_sicbo(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 强制结算失败：{str(e)}")
 
 
-async def set_sicbo_countdown(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def set_sicbo_countdown(plugin: "FishingPlugin", event: GameEvent):
     """[管理员] 设置骰宝倒计时时间"""
     args = event.message_str.split(" ")
     
@@ -476,7 +477,7 @@ async def set_sicbo_countdown(plugin: "FishingPlugin", event: AstrMessageEvent):
             
             # 生成设置成功图片
             image = draw_sicbo_countdown_setting(seconds, admin_name)
-            image_path = save_image_to_temp(image, "sicbo_countdown_setting", plugin.data_dir)
+            image_path = save_image_to_temp(image, "sicbo_countdown_setting", plugin.runtime_dir)
             yield event.image_result(image_path)
         else:
             yield event.plain_result(result["message"])
@@ -486,7 +487,7 @@ async def set_sicbo_countdown(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 设置失败：{str(e)}")
 
 
-async def set_sicbo_mode(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def set_sicbo_mode(plugin: "FishingPlugin", event: GameEvent):
     """[管理员] 设置骰宝消息模式"""
     args = event.message_str.split(" ")
     

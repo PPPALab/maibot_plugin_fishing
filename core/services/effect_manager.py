@@ -7,9 +7,8 @@ from ..repositories.abstract_repository import (
     AbstractUserRepository,
     AbstractUserBuffRepository,
 )
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 class EffectManager:
     def __init__(self):
         self._effects: Dict[str, AbstractItemEffect] = {}

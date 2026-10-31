@@ -1,4 +1,6 @@
 import sqlite3
+import logging
+logger = logging.getLogger(__name__)
 
 
 def get_default_value(column_name):
@@ -16,7 +18,8 @@ def up(cursor: sqlite3.Cursor):
     """
     为market表添加对fish类型的支持
     """
-    from astrbot.api import logger
+    import logging
+    logger = logging.getLogger(__name__)
     logger.info("正在执行 026_add_fish_support_to_market: 更新market表约束以支持鱼类类型...")
     
     # SQLite不支持直接修改CHECK约束，需要重建表

@@ -1,5 +1,5 @@
 import os
-from astrbot.api.event import filter, AstrMessageEvent
+from ..events import GameEvent
 from ..draw.help import draw_help_image
 from ..draw.state import draw_state_image, get_user_state_data
 from ..core.utils import get_now
@@ -7,10 +7,10 @@ from ..utils import safe_datetime_handler, parse_target_user_id, parse_amount
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def register_user(self: "FishingPlugin", event: AstrMessageEvent):
+async def register_user(self: "FishingPlugin", event: GameEvent):
     """注册用户命令"""
     user_id = self._get_effective_user_id(event)
     nickname = event.get_sender_name() if event.get_sender_name() is not None else user_id
@@ -19,14 +19,14 @@ async def register_user(self: "FishingPlugin", event: AstrMessageEvent):
     else:
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
-async def sign_in(self: "FishingPlugin", event: AstrMessageEvent):
+async def sign_in(self: "FishingPlugin", event: GameEvent):
     """签到"""
     user_id = self._get_effective_user_id(event)
     result = self.user_service.daily_sign_in(user_id)
     if result["success"]:
         yield event.plain_result(result["message"])
 
-async def state(self: "FishingPlugin", event: AstrMessageEvent):
+async def state(self: "FishingPlugin", event: GameEvent):
     """查看用户状态"""
     user_id = self._get_effective_user_id(event)
 
@@ -45,13 +45,13 @@ async def state(self: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result('❌ 用户不存在，请先发送"注册"来开始游戏')
         return
     # 生成状态图像
-    image = await draw_state_image(user_data, self.data_dir)
+    image = await draw_state_image(user_data, self.runtime_dir)
     # 保存图像到临时文件
     image_path = os.path.join(self.tmp_dir, "user_status.png")
     image.save(image_path)
     yield event.image_result(image_path)
 
-async def fishing_log(self: "FishingPlugin", event: AstrMessageEvent):
+async def fishing_log(self: "FishingPlugin", event: GameEvent):
     """查看钓鱼记录"""
     user_id = self._get_effective_user_id(event)
     if result := self.fishing_service.get_user_fish_log(user_id):
@@ -72,14 +72,20 @@ async def fishing_log(self: "FishingPlugin", event: AstrMessageEvent):
     else:
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
-async def fishing_help(self: "FishingPlugin", event: AstrMessageEvent):
+async def fishing_help(self: "FishingPlugin", event: GameEvent):
     """显示钓鱼插件帮助信息"""
-    image = draw_help_image()
+    from ..blocking import run_blocking
+
     output_path = os.path.join(self.tmp_dir, "fishing_help.png")
-    image.save(output_path)
+
+    def render_help():
+        image = draw_help_image()
+        image.save(output_path)
+
+    await run_blocking(render_help)
     yield event.image_result(output_path)
 
-async def transfer_coins(self: "FishingPlugin", event: AstrMessageEvent):
+async def transfer_coins(self: "FishingPlugin", event: GameEvent):
     """转账金币"""
     args = event.message_str.split(" ")
     
@@ -112,7 +118,7 @@ async def transfer_coins(self: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def update_nickname(self: "FishingPlugin", event: AstrMessageEvent):
+async def update_nickname(self: "FishingPlugin", event: GameEvent):
     """更新用户昵称"""
     args = event.message_str.split(" ")
     

@@ -1,6 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     """
     应用此迁移：重构 baits 表，添加结构化效果列，并根据已有的 effect_description 填充新列的数据。

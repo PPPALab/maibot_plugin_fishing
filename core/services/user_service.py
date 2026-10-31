@@ -195,6 +195,17 @@ class UserService:
         free_gacha_reward_msg = ""
         free_pool = self.gacha_service.get_daily_free_pool()
         if free_pool:
+            # Upstream seeds the daily pool but no prizes. A successful sign-in
+            # must not look like a failed payment or invent arbitrary rewards.
+            pool = self.gacha_service.gacha_repo.get_pool_by_id(free_pool.gacha_pool_id)
+            if not pool or not pool.items:
+                return {
+                    "success": True,
+                    "message": message + "\nℹ️ 每日补给未配置奖励，暂未发放补给。签到金币和高级货币已到账，请管理员在钓鱼后台的卡池管理中配置奖品。",
+                    "coins_reward": coins_reward,
+                    "bonus_coins": bonus_coins,
+                    "consecutive_days": user.consecutive_login_days,
+                }
             gacha_result = self.gacha_service.perform_draw(user.user_id, free_pool.gacha_pool_id, 1)
             if gacha_result.get("success"):
                 reward = gacha_result.get("results", [])[0]
@@ -844,6 +855,8 @@ class UserService:
         Returns:
             包含操作结果的字典
         """
+        if type(quantity) is not int or quantity <= 0:
+            return {"success": False, "message": "数量必须为正整数"}
         user = self.user_repo.get_by_id(user_id)
         if not user:
             return {"success": False, "message": "用户不存在"}
@@ -906,6 +919,8 @@ class UserService:
         Returns:
             包含操作结果的字典
         """
+        if type(quantity) is not int or quantity <= 0:
+            return {"success": False, "message": "数量必须为正整数"}
         user = self.user_repo.get_by_id(user_id)
         if not user:
             return {"success": False, "message": "用户不存在"}

@@ -2,20 +2,21 @@ import asyncio
 from hypercorn.config import Config
 from hypercorn.asyncio import serve
 
-from astrbot.api import logger
-from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.core.star.filter.permission import PermissionType
-from astrbot.api.message_components import At, Node, Plain
+import logging
+
+logger = logging.getLogger(__name__)
+from ..events import GameEvent
+from ..events import Mention
 
 from ..utils import parse_target_user_id, _is_port_available, parse_amount
 from ..manager.server import create_app
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..main import FishingPlugin
+    from ..engine import FishingPlugin
 
 
-async def modify_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def modify_coins(plugin: "FishingPlugin", event: GameEvent):
     """修改用户金币"""
     args = event.message_str.split(" ")
 
@@ -45,7 +46,7 @@ async def modify_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def modify_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def modify_premium(plugin: "FishingPlugin", event: GameEvent):
     """修改用户高级货币"""
     args = event.message_str.split(" ")
 
@@ -76,7 +77,7 @@ async def modify_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(f"✅ 成功修改用户 {target_user_id} 的高级货币为 {premium}")
 
 
-async def reward_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def reward_premium(plugin: "FishingPlugin", event: GameEvent):
     """奖励用户高级货币"""
     args = event.message_str.split(" ")
 
@@ -107,7 +108,7 @@ async def reward_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(f"✅ 成功给用户 {target_user_id} 奖励 {premium} 高级货币")
 
 
-async def deduct_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def deduct_premium(plugin: "FishingPlugin", event: GameEvent):
     """扣除用户高级货币"""
     args = event.message_str.split(" ")
 
@@ -141,7 +142,7 @@ async def deduct_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(f"✅ 成功扣除用户 {target_user_id} 的 {premium} 高级货币")
 
 
-async def reward_all_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def reward_all_coins(plugin: "FishingPlugin", event: GameEvent):
     """给所有注册用户发放金币"""
     args = event.message_str.split(" ")
     if len(args) < 2:
@@ -171,7 +172,7 @@ async def reward_all_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(f"✅ 已向 {updated} 位用户每人发放 {amount_int} 金币")
 
 
-async def reward_all_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def reward_all_premium(plugin: "FishingPlugin", event: GameEvent):
     """给所有注册用户发放高级货币"""
     args = event.message_str.split(" ")
     if len(args) < 2:
@@ -199,7 +200,7 @@ async def reward_all_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(f"✅ 已向 {updated} 位用户每人发放 {amount_int} 高级货币")
 
 
-async def deduct_all_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def deduct_all_coins(plugin: "FishingPlugin", event: GameEvent):
     """从所有注册用户扣除金币（不低于0）"""
     args = event.message_str.split(" ")
     if len(args) < 2:
@@ -234,7 +235,7 @@ async def deduct_all_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
     )
 
 
-async def deduct_all_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def deduct_all_premium(plugin: "FishingPlugin", event: GameEvent):
     """从所有注册用户扣除高级货币（不低于0）"""
     args = event.message_str.split(" ")
     if len(args) < 2:
@@ -271,7 +272,7 @@ async def deduct_all_premium(plugin: "FishingPlugin", event: AstrMessageEvent):
     )
 
 
-async def reward_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def reward_coins(plugin: "FishingPlugin", event: GameEvent):
     """奖励用户金币"""
     args = event.message_str.split(" ")
 
@@ -308,7 +309,7 @@ async def reward_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def deduct_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def deduct_coins(plugin: "FishingPlugin", event: GameEvent):
     """扣除用户金币"""
     args = event.message_str.split(" ")
 
@@ -344,74 +345,16 @@ async def deduct_coins(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 出错啦！请稍后再试。")
 
 
-async def start_admin(plugin: "FishingPlugin", event: AstrMessageEvent):
-    if plugin.web_admin_task and not plugin.web_admin_task.done():
-        yield event.plain_result("❌ 钓鱼后台管理已经在运行中")
-        return
-    yield event.plain_result("🔄 正在启动钓鱼插件Web管理后台...")
-
-    if not await _is_port_available(plugin.port):
-        yield event.plain_result(f"❌ 端口 {plugin.port} 已被占用，请更换端口后重试")
-        return
-
-    try:
-        services_to_inject = {
-            "item_template_service": plugin.item_template_service,
-            "user_service": plugin.user_service,
-            "market_service": plugin.market_service,
-            "fishing_zone_service": plugin.fishing_zone_service,
-            "shop_service": plugin.shop_service,
-            "exchange_service": plugin.exchange_service,
-        }
-        app = create_app(secret_key=plugin.secret_key, services=services_to_inject)
-        config = Config()
-        config.bind = [f"0.0.0.0:{plugin.port}"]
-        plugin.web_admin_task = asyncio.create_task(serve(app, config))
-
-        # 等待服务启动
-        for i in range(10):
-            if await plugin._check_port_active():
-                break
-            await asyncio.sleep(1)
-        else:
-            raise TimeoutError("⌛ 启动超时，请检查防火墙设置")
-
-        await asyncio.sleep(1)  # 等待服务启动
-
-        yield event.plain_result(
-            f"✅ 钓鱼后台已启动！\n🔗请访问 http://localhost:{plugin.port}/admin\n🔑 密钥请到配置文件中查看\n\n⚠️ 重要提示：\n• 如需公网访问，请自行配置端口转发和防火墙规则\n• 确保端口 {plugin.port} 已开放并映射到公网IP\n• 建议使用反向代理（如Nginx）增强安全性"
-        )
-    except Exception as e:
-        logger.error(f"启动后台失败: {e}", exc_info=True)
-        yield event.plain_result(f"❌ 启动后台失败: {e}")
+async def start_admin(plugin: "FishingPlugin", event: GameEvent):
+    yield event.plain_result(await plugin.native_start_web())
 
 
-async def stop_admin(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def stop_admin(plugin: "FishingPlugin", event: GameEvent):
     """关闭钓鱼后台管理"""
-    if (
-        not hasattr(plugin, "web_admin_task")
-        or not plugin.web_admin_task
-        or plugin.web_admin_task.done()
-    ):
-        yield event.plain_result("❌ 钓鱼后台管理没有在运行中")
-        return
-
-    try:
-        # 1. 请求取消任务
-        plugin.web_admin_task.cancel()
-        # 2. 等待任务实际被取消
-        await plugin.web_admin_task
-    except asyncio.CancelledError:
-        # 3. 捕获CancelledError，这是成功关闭的标志
-        logger.info("钓鱼插件Web管理后台已成功关闭")
-        yield event.plain_result("✅ 钓鱼后台已关闭")
-    except Exception as e:
-        # 4. 捕获其他可能的意外错误
-        logger.error(f"关闭钓鱼后台管理时发生意外错误: {e}", exc_info=True)
-        yield event.plain_result(f"❌ 关闭钓鱼后台管理失败: {e}")
+    yield event.plain_result(await plugin.native_stop_web())
 
 
-async def sync_initial_data(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def sync_initial_data(plugin: "FishingPlugin", event: GameEvent):
     """从 initial_data.py 同步所有初始设定（道具、商店等）。"""
     try:
         plugin.data_setup_service.sync_all_initial_data()
@@ -421,7 +364,7 @@ async def sync_initial_data(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result(f"❌ 同步初始设定数据失败: {e}")
 
 
-async def impersonate_start(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def impersonate_start(plugin: "FishingPlugin", event: GameEvent):
     """管理员开始扮演一名用户。"""
     admin_id = event.get_sender_id()
     args = event.message_str.split(" ")
@@ -454,7 +397,7 @@ async def impersonate_start(plugin: "FishingPlugin", event: AstrMessageEvent):
     )
 
 
-async def impersonate_stop(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def impersonate_stop(plugin: "FishingPlugin", event: GameEvent):
     """管理员结束扮演用户。"""
     admin_id = event.get_sender_id()
     if admin_id in plugin.impersonation_map:
@@ -464,7 +407,7 @@ async def impersonate_stop(plugin: "FishingPlugin", event: AstrMessageEvent):
         yield event.plain_result("❌ 您当前没有在代理任何用户。")
 
 
-async def reward_all_items(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def reward_all_items(plugin: "FishingPlugin", event: GameEvent):
     """给所有注册用户发放道具"""
     args = event.message_str.split(" ")
     if len(args) < 4:
@@ -541,7 +484,7 @@ async def reward_all_items(plugin: "FishingPlugin", event: AstrMessageEvent):
     )
 
 
-async def replenish_fish_pools(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def replenish_fish_pools(plugin: "FishingPlugin", event: GameEvent):
     """补充鱼池 - 重置所有钓鱼区域的稀有鱼剩余数量"""
     try:
         # 获取所有钓鱼区域
@@ -582,7 +525,7 @@ async def replenish_fish_pools(plugin: "FishingPlugin", event: AstrMessageEvent)
         return
 
 
-async def grant_title(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def grant_title(plugin: "FishingPlugin", event: GameEvent):
     """授予用户称号"""
     args = event.message_str.split(" ")
     
@@ -605,7 +548,7 @@ async def grant_title(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def revoke_title(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def revoke_title(plugin: "FishingPlugin", event: GameEvent):
     """移除用户称号"""
     args = event.message_str.split(" ")
     
@@ -628,7 +571,7 @@ async def revoke_title(plugin: "FishingPlugin", event: AstrMessageEvent):
     yield event.plain_result(result["message"])
 
 
-async def create_title(plugin: "FishingPlugin", event: AstrMessageEvent):
+async def create_title(plugin: "FishingPlugin", event: GameEvent):
     """创建自定义称号"""
     args = event.message_str.split(" ")
     

@@ -74,7 +74,7 @@ async def draw_state_image(user_data: Dict[str, Any], data_dir: str) -> Image.Im
     def load_font(name, size):
         path = os.path.join(os.path.dirname(__file__), "resource", name)
         try:
-            return ImageFont.truetype(path, size)
+            return load_font_with_cjk_fallback(path, size)
         except Exception as e:
             return ImageFont.load_default()
 

@@ -1,7 +1,6 @@
 import sqlite3
-from astrbot.api import logger
-
-
+import logging
+logger = logging.getLogger(__name__)
 def up(cursor: sqlite3.Cursor):
     logger.info("正在执行 012_update_gacha_pool_item_types: 更新 gacha_pool_items 表的 item_type 约束...")
 

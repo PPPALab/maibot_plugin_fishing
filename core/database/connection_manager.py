@@ -4,9 +4,9 @@ import time
 from typing import Optional
 from contextlib import contextmanager
 
-from astrbot.api import logger
+import logging
 
-
+logger = logging.getLogger(__name__)
 class DatabaseConnectionManager:
     """数据库连接管理器，提供线程安全的连接管理和重试机制"""
     
@@ -19,29 +19,19 @@ class DatabaseConnectionManager:
     
     def _get_connection(self) -> sqlite3.Connection:
         """获取一个线程安全的数据库连接"""
-        conn = getattr(self._local, "connection", None)
-        if conn is None:
-            conn = self._create_connection()
-            self._local.connection = conn
-        return conn
+        # The active UoW owns lifetime; never cache a wrapper past its transaction.
+        return self._create_connection()
     
     def _create_connection(self) -> sqlite3.Connection:
-        """创建新的数据库连接"""
-        conn = sqlite3.connect(
-            self.db_path, 
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-            timeout=self.timeout
-        )
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA journal_mode = WAL;")  # 使用WAL模式提高并发性能
-        conn.execute("PRAGMA synchronous = NORMAL;")  # 平衡性能和安全
-        return conn
+        """复用工作单元连接，避免旁路日期序列化及事务边界。"""
+        from .unit_of_work import connection
+        return connection(self.db_path)
     
     @contextmanager
     def get_connection(self):
         """获取数据库连接的上下文管理器，支持重试机制"""
-        conn = self._get_connection()
+        from .unit_of_work import connection
+        conn = connection(self.db_path)
         try:
             yield conn
         except sqlite3.OperationalError as e:
