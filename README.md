@@ -1,6 +1,6 @@
 # 钓鱼小游戏
 
-版本：**1.0.1** · 仓库：[PPPALab/maibot_plugin_fishing](https://github.com/PPPALab/maibot_plugin_fishing)
+版本：**1.0.2** · 仓库：[PPPALab/maibot_plugin_fishing](https://github.com/PPPALab/maibot_plugin_fishing)
 
 插件 ID：`github.PPPALab.maibot_plugin_fishing`。
 

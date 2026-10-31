@@ -1,6 +1,6 @@
 [project]
 name = "maibot-plugin-fishing-astrbot"
-version = "1.0.1"
+version = "1.0.2"
 description = "钓鱼小游戏，支持钓鱼、市场、商店、抽卡等，移植自 AstrBot。"
 requires-python = ">=3.12"
 license = "AGPL-3.0-only"

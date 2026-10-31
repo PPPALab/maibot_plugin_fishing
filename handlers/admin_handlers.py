@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 from ..events import GameEvent
 from ..events import Mention
 
-from ..utils import parse_target_user_id, _is_port_available, parse_amount
+from ..utils import parse_target_user_id, parse_amount
 from ..manager.server import create_app
 from typing import TYPE_CHECKING
 
