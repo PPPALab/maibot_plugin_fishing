@@ -18,6 +18,7 @@ def test_host_required_manifest_fields():
     missing = required - manifest.keys()
     assert not missing, f'manifest 校验失败: 缺少必需字段: {", ".join(sorted(missing))}'
     assert manifest['manifest_version'] == 2
+    assert manifest['id'] == 'github.PPPALab.maibot_plugin_fishing'
     project = tomllib.loads((Path(__file__).parents[1] / 'pyproject.toml').read_text())['project']
     assert manifest['version'] == project['version']
     assert manifest['license'] == project['license'] == 'AGPL-3.0-only'

@@ -1,6 +1,8 @@
 # 钓鱼小游戏
 
-版本：**1.0.0** · 仓库：[PPPALab/maibot_plugin_fishing](https://github.com/PPPALab/maibot_plugin_fishing)
+版本：**1.0.1** · 仓库：[PPPALab/maibot_plugin_fishing](https://github.com/PPPALab/maibot_plugin_fishing)
+
+插件 ID：`github.PPPALab.maibot_plugin_fishing`。
 
 为 MaiBot 提供钓鱼小游戏、装备、交易市场、及管理后台。基于
 [AstrBot Fishing](https://github.com/sakuradairong/astrbot_plugin_fishing) 原生移植，
@@ -90,13 +92,25 @@ secret_key = "请替换为你自己的独立密码"
 
 ```text
 plugins/<插件源码目录>/config.toml             配置，包括后台密码
-data/plugins/fishing.astrbot-native/
+data/plugins/github.PPPALab.maibot_plugin_fishing/
   astrbot-fishing.sqlite3                     玩家、金币、装备、库存及游戏状态
-temp/plugins/fishing.astrbot-native/
+temp/plugins/github.PPPALab.maibot_plugin_fishing/
   tmp/                                       生成图片
   avatar_cache/                              头像缓存
   fish_icon_cache/                           鱼图缓存
 ```
+
+### 从 1.0.0 升级
+
+1.0.1 将插件 ID 从 `fishing.astrbot-native` 改为 `github.PPPALab.maibot_plugin_fishing`。
+宿主会将其视为新的插件身份，不会自动迁移旧 ID 的数据。
+
+1. 完全停止 MaiBot，备份插件 `config.toml` 和整个旧持久化目录。
+2. 将 `data/plugins/fishing.astrbot-native/` 整个目录迁移至
+   `data/plugins/github.PPPALab.maibot_plugin_fishing/`（实际以宿主分配路径为准），
+   包括数据库及存在的 `-wal`、`-shm` 文件；如果目标目录已有数据，先备份并核对，不要直接覆盖或合并。
+3. 更新插件源码并保留 `config.toml`；在宿主中重新扫描、启用新 ID，确认旧 ID 不再运行。
+4. 启动后确认玩家进度和管理员配置。旧 ID 的临时缓存无需迁移，会自动重新生成。
 
 ### 缓存如何清理
 

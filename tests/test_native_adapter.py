@@ -31,7 +31,7 @@ class Sender:
 
 async def load_plugin(tmp_path):
     plugin = create_plugin()
-    context = PluginContext('fishing.astrbot-native', paths=PluginPaths(tmp_path, tmp_path / 'runtime'))
+    context = PluginContext('github.PPPALab.maibot_plugin_fishing', paths=PluginPaths(tmp_path, tmp_path / 'runtime'))
     context.send = Sender()
     plugin._set_context(context)
     plugin._plugin_config_instance = FishingConfig()

@@ -1,5 +1,11 @@
 # 更新记录
 
+## 1.0.1
+
+- 插件身份：ID 改为 `github.PPPALab.maibot_plugin_fishing`，同步运行时标识和测试。
+- 升级说明：新增旧 ID 数据目录迁移步骤；数据库格式与游戏规则不变。
+- 从 1.0.0 升级前请停止 MaiBot 并备份，按 [README](README.md#从-100-升级) 迁移数据、重新启用新 ID。
+
 ## 1.0.0
 
 MaiBot 原生移植首个发布版本，基于 AstrBot Fishing v2.4.7。

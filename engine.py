@@ -76,7 +76,7 @@ class FishingPlugin:
         self.area3num = config.get("area3num", 500)
         
         # 插件ID
-        self.plugin_id = "fishing.astrbot-native"
+        self.plugin_id = "github.PPPALab.maibot_plugin_fishing"
 
         # --- 1.1. 数据与临时文件路径管理 ---
         self.data_dir = data_dir

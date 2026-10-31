@@ -11,7 +11,7 @@ from test_native_adapter import Sender, command
 
 def configured_plugin(tmp_path):
     p = create_plugin()
-    context = PluginContext('fishing.astrbot-native', paths=PluginPaths(tmp_path / 'data', tmp_path / 'runtime'))
+    context = PluginContext('github.PPPALab.maibot_plugin_fishing', paths=PluginPaths(tmp_path / 'data', tmp_path / 'runtime'))
     context.send = Sender()
     p._set_context(context)
     p._plugin_config_instance = FishingConfig()

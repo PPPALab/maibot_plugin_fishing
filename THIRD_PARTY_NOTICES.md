@@ -19,7 +19,7 @@ Copyright 原作者及所有上游贡献者（sakuradairong/astrbot_plugin_fishi
 当前根README与CHANGELOG为移植版文档。
 
 移植版发布仓库：https://github.com/PPPALab/maibot_plugin_fishing 。
-本项目发布版本1.0.0与原AstrBot版本2.4.7相互独立；保留上游作者和版权并不意味着
+本项目版本与原AstrBot版本2.4.7相互独立；保留上游作者和版权并不意味着
 声称原作者参与或背书本项目的发布。软件许可证继续使用AGPL-3.0-only。
 
 ## 字体（不是 AGPL）
